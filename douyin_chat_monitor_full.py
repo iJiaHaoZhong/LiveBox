@@ -98,8 +98,15 @@ class DouyinLiveMonitor:
             with open(model_path, 'r', encoding='utf-8') as f:
                 model_code = f.read()
 
-            # 合并代码
-            full_js_code = model_code + "\n" + vfun_code
+            # 创建模拟的浏览器环境
+            browser_env = """
+            var window = {
+                byted_acrawler: null
+            };
+            """
+
+            # 合并代码：先创建 window 对象，再加载库代码
+            full_js_code = browser_env + "\n" + model_code + "\n" + vfun_code
 
             # 编译 JavaScript
             print("正在编译 JavaScript 环境...")
@@ -393,25 +400,48 @@ class DouyinLiveMonitor:
         print(f"URL: {ws_url[:120]}...")
 
         try:
-            async with websockets.connect(ws_url, extra_headers=headers) as websocket:
-                self.websocket = websocket
-                self.running = True
-                print("✓ WebSocket 连接成功！")
-                print("开始监听消息...\n")
-                print("=" * 60)
+            # websockets 13.0+ 使用 additional_headers 而不是 extra_headers
+            try:
+                async with websockets.connect(ws_url, additional_headers=headers) as websocket:
+                    self.websocket = websocket
+                    self.running = True
+                    print("✓ WebSocket 连接成功！")
+                    print("开始监听消息...\n")
+                    print("=" * 60)
 
-                # 创建心跳任务
-                heartbeat_task = asyncio.create_task(self.heartbeat())
+                    # 创建心跳任务
+                    heartbeat_task = asyncio.create_task(self.heartbeat())
 
-                # 接收消息
-                try:
-                    async for message in websocket:
-                        self.parse_message(message)
-                except websockets.exceptions.ConnectionClosed:
-                    print("\nWebSocket 连接已关闭")
-                finally:
-                    self.running = False
-                    heartbeat_task.cancel()
+                    # 接收消息
+                    try:
+                        async for message in websocket:
+                            self.parse_message(message)
+                    except websockets.exceptions.ConnectionClosed:
+                        print("\nWebSocket 连接已关闭")
+                    finally:
+                        self.running = False
+                        heartbeat_task.cancel()
+            except TypeError:
+                # 如果 additional_headers 不支持，尝试旧版本的 extra_headers
+                async with websockets.connect(ws_url, extra_headers=headers) as websocket:
+                    self.websocket = websocket
+                    self.running = True
+                    print("✓ WebSocket 连接成功！")
+                    print("开始监听消息...\n")
+                    print("=" * 60)
+
+                    # 创建心跳任务
+                    heartbeat_task = asyncio.create_task(self.heartbeat())
+
+                    # 接收消息
+                    try:
+                        async for message in websocket:
+                            self.parse_message(message)
+                    except websockets.exceptions.ConnectionClosed:
+                        print("\nWebSocket 连接已关闭")
+                    finally:
+                        self.running = False
+                        heartbeat_task.cancel()
 
         except Exception as e:
             print(f"WebSocket 连接失败: {e}")
