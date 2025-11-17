@@ -78,7 +78,9 @@ def webhook():
             "name": "用户昵称",
             "msg": "消息内容"
         },
-        "raw": { ... }  # 原始的完整数据
+        "raw": { ... },  # 原始的完整数据
+        "timestamp": 1234567890,  # 时间戳
+        "room_id": "7573619563361307442"  # 直播间ID
     }
     """
     try:
@@ -92,7 +94,9 @@ def webhook():
         print(f"\n{'='*60}")
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 收到消息")
         print(f"消息类型: {message.get('type', 'unknown')}")
-        print(f"消息内容: {json.dumps(message, ensure_ascii=False, indent=2)}")
+        print(f"直播间ID: {message.get('room_id', 'unknown')}")
+        print(f"时间戳: {message.get('timestamp', 'unknown')}")
+        print(f"消息内容: {json.dumps(message.get('data', {}), ensure_ascii=False, indent=2)}")
         print(f"{'='*60}\n")
 
         # 获取消息类型
@@ -103,6 +107,8 @@ def webhook():
 
         # 获取消息数据
         data = message.get('data', {})
+        room_id = message.get('room_id', '')
+        timestamp = message.get('timestamp', 0)
 
         # 调用对应的处理器
         if msg_type in message_handlers:

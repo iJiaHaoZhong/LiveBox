@@ -485,7 +485,11 @@ const decodeChat = (data) => {
         msg: content,
     }
     checkList.value.includes('chat') && messageList.value.push(message)
-    // console.log('chatMsg---', user.nickName, content)
+
+    // 推送到配置的 URL
+    if (pushUrl.value && checkList.value.includes('chat')) {
+        pushMessageToUrl('chat', message, chatMsg)
+    }
 }
 // 解析礼物消息
 const decodeGift = (data) => {
@@ -500,6 +504,11 @@ const decodeGift = (data) => {
     checkList.value.includes('gift') && messageList.value.push(message)
     // 计算主播收益
     diamond.value = diamond.value + gift.diamondCount * repeatCount
+
+    // 推送到配置的 URL
+    if (pushUrl.value && checkList.value.includes('gift')) {
+        pushMessageToUrl('gift', message, giftMsg)
+    }
 }
 
 // 进入房间
@@ -512,7 +521,11 @@ const enterLive = (data) => {
         msg: '来了',
     }
     checkList.value.includes('comein') && messageList.value.push(message)
-    // console.log('enterLive---', enteryMsg)
+
+    // 推送到配置的 URL
+    if (pushUrl.value && checkList.value.includes('comein')) {
+        pushMessageToUrl('comein', message, enteryMsg)
+    }
 }
 
 // 点赞消息
@@ -530,6 +543,11 @@ const likeLive = (data) => {
         totalLike: total,
     }
     checkList.value.includes('like') && messageList.value.push(message)
+
+    // 推送到配置的 URL
+    if (pushUrl.value && checkList.value.includes('like')) {
+        pushMessageToUrl('like', message, likeMsg)
+    }
 }
 
 // 关注主播
@@ -546,6 +564,40 @@ const followLive = (data) => {
         fans: followCount,
     }
     checkList.value.includes('follow') && messageList.value.push(message)
+
+    // 推送到配置的 URL
+    if (pushUrl.value && checkList.value.includes('follow')) {
+        pushMessageToUrl('follow', message, followMsg)
+    }
+}
+
+// 推送消息到配置的 URL
+const pushMessageToUrl = async (type, message, rawData) => {
+    if (!pushUrl.value) return
+
+    try {
+        const payload = {
+            type: type,
+            data: message,
+            raw: rawData,
+            timestamp: Date.now(),
+            room_id: liveInfo.value.roomId,
+        }
+
+        const response = await fetch(pushUrl.value, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        })
+
+        if (!response.ok) {
+            console.error('推送失败:', response.status, response.statusText)
+        }
+    } catch (error) {
+        console.error('推送消息到URL失败:', error)
+    }
 }
 
 // 直播间统计
