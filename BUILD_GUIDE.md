@@ -58,8 +58,21 @@ nvm install 18
 
 #### macOS 安装 Rust
 
+**方法 1：使用 Homebrew（推荐 - 最简单）**
+
 ```bash
-# 1. 安装 Rust（推荐方式）
+# 使用 Homebrew 安装 Rust
+brew install rust
+
+# 验证安装是否成功：
+cargo --version
+rustc --version
+```
+
+**方法 2：使用 rustup（官方推荐 - 更灵活）**
+
+```bash
+# 1. 安装 Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 2. 按照提示选择默认安装（输入 1 然后回车）
@@ -71,6 +84,10 @@ source $HOME/.cargo/env
 cargo --version
 rustc --version
 ```
+
+**两种方法的区别**：
+- Homebrew: 简单快捷，一行命令搞定，适合新手
+- rustup: 官方工具，可以管理多个 Rust 版本，方便更新和切换版本
 
 #### Windows 安装 Rust
 
@@ -373,13 +390,17 @@ cnpm install
 cargo --version
 rustc --version
 
-# 2. 如果提示 "command not found"，说明未安装，请执行：
+# 2. 如果提示 "command not found"，说明未安装
+# macOS 用户（最简单）：
+brew install rust
+
+# 或使用 rustup（跨平台）：
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# 3. 安装完成后，重启终端或运行：
+# 3. 如果使用 rustup 安装，需要运行：
 source $HOME/.cargo/env
 
-# 4. macOS 用户：如果还是不行，添加到 shell 配置文件
+# 4. 如果使用 rustup 且重启终端后失效，添加到 shell 配置文件
 # 对于 zsh (macOS 默认)：
 echo 'source $HOME/.cargo/env' >> ~/.zshrc
 source ~/.zshrc
