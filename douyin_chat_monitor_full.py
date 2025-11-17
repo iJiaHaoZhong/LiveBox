@@ -450,6 +450,35 @@ class DouyinLiveMonitor:
         asyncio.run(self.connect())
 
 
+def normalize_url(url: str) -> str:
+    """规范化 URL，处理常见的输入错误"""
+    url = url.strip()
+
+    # 移除可能的引号
+    url = url.strip('"').strip("'")
+
+    # 如果缺少协议前缀，自动添加
+    if url.startswith('live.douyin.com') or url.startswith('www.douyin.com'):
+        url = 'https://' + url
+    elif url.startswith('://'):
+        # 处理 "://xxx" 这种情况
+        url = 'https' + url
+    elif url.startswith('s://') or url.startswith('http://'):
+        # 处理 "s://xxx" 或 "http://xxx"
+        url = url.replace('s://', 'https://', 1).replace('http://', 'https://', 1)
+    elif not url.startswith('https://') and not url.startswith('http://'):
+        # 如果完全没有协议
+        if 'douyin.com' in url:
+            url = 'https://' + url
+        else:
+            print(f"警告: URL 格式可能不正确: {url}")
+
+    # 确保使用 https
+    url = url.replace('http://', 'https://')
+
+    return url
+
+
 def main():
     """主函数"""
     # 检查依赖
@@ -471,6 +500,12 @@ def main():
     if not live_url:
         print("使用默认测试 URL")
         live_url = "https://live.douyin.com/972176515698"
+    else:
+        # 规范化 URL
+        original_url = live_url
+        live_url = normalize_url(live_url)
+        if original_url != live_url:
+            print(f"已自动修正 URL: {live_url}")
 
     # 创建监控器
     monitor = DouyinLiveMonitor(live_url, use_real_signature=EXECJS_AVAILABLE)
