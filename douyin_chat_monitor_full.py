@@ -99,13 +99,23 @@ class DouyinLiveMonitor:
                 model_code = f.read()
 
             # 创建模拟的浏览器环境
+            # model.js 是一个自执行函数，需要正确的全局对象
             browser_env = """
-            var window = {
-                byted_acrawler: null
+            // 创建全局 window 对象
+            var window = this;
+            var self = this;
+            var global = this;
+
+            // 模拟必要的浏览器 API
+            window.navigator = {
+                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             };
+
+            // 初始化 byted_acrawler 占位
+            window.byted_acrawler = null;
             """
 
-            # 合并代码：先创建 window 对象，再加载库代码
+            # 合并代码：先创建环境，再加载库代码，最后加载签名函数
             full_js_code = browser_env + "\n" + model_code + "\n" + vfun_code
 
             # 编译 JavaScript
@@ -214,6 +224,25 @@ class DouyinLiveMonitor:
             try:
                 # 调用 JavaScript 签名函数
                 print("正在生成真实签名...")
+
+                # 首先检查函数是否存在
+                test_code = "typeof creatSignature !== 'undefined'"
+                func_exists = self.js_ctx.eval(test_code)
+
+                if not func_exists:
+                    print("错误: creatSignature 函数未定义")
+                    print("尝试检查 window.creatSignature...")
+                    test_code2 = "typeof window !== 'undefined' && typeof window.creatSignature !== 'undefined'"
+                    window_func_exists = self.js_ctx.eval(test_code2)
+
+                    if window_func_exists:
+                        # 从 window 对象调用
+                        signature = self.js_ctx.eval(f"window.creatSignature('{self.room_id}', '{self.unique_id}')")
+                        print(f"✓ 真实签名生成成功: {signature[:30]}...")
+                        return signature
+                    else:
+                        raise Exception("无法找到 creatSignature 函数")
+
                 signature = self.js_ctx.call(
                     'creatSignature',
                     self.room_id,
@@ -223,12 +252,24 @@ class DouyinLiveMonitor:
                 return signature
 
             except Exception as e:
-                print(f"签名生成失败: {e}")
-                print("降级使用简化签名")
-                return self._simple_signature()
+                print(f"❌ 签名生成失败: {e}")
+                print("\n" + "=" * 60)
+                print("签名生成失败 - 可能的解决方案:")
+                print("=" * 60)
+                print("1. 手动获取签名（推荐）:")
+                print("   - 在浏览器中打开直播间")
+                print("   - F12 打开开发者工具 → Network → WS")
+                print("   - 找到 webcast/im/push/v2/ 连接")
+                print("   - 复制 URL 中的 signature= 参数")
+                print("   - 修改代码，在 generate_signature() 中直接返回该签名")
+                print("\n2. 或使用简化签名尝试连接（成功率低）")
+                print("=" * 60 + "\n")
+
+                # 返回空签名（会导致连接失败，但至少能看到错误）
+                return ""
         else:
             print("使用简化签名（可能无法连接）")
-            return self._simple_signature()
+            return ""
 
     def _simple_signature(self) -> str:
         """简化版签名（不保证有效）"""
