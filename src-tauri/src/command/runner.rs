@@ -68,9 +68,32 @@ impl DouYinReq {
             // 使用正则表达式匹配直播间信息
             re = Regex::new(r#"roomInfo\\":\{\\"room\\":(.*?),\\"toolbar_data"#).unwrap();
             let unique_re = Regex::new(r#"user_unique_id\\":\\"(.*?)\\"}"#).unwrap();
-            unique_id = unique_re.captures(&body).unwrap().get(1).unwrap().as_str();
+
+            // 安全地获取 unique_id，避免 panic
+            if let Some(captures) = unique_re.captures(&body) {
+                if let Some(matched) = captures.get(1) {
+                    unique_id = matched.as_str();
+                    println!("成功提取 unique_id: {}", unique_id);
+                } else {
+                    println!("警告: 正则匹配成功但无法获取 group 1");
+                }
+            } else {
+                println!("警告: 无法匹配 user_unique_id，可能页面结构已变化");
+            }
         }
-        let main_info = re.captures(&body).unwrap().get(1).unwrap().as_str();
+
+        // 安全地获取房间信息
+        let main_info = match re.captures(&body) {
+            Some(captures) => match captures.get(1) {
+                Some(matched) => matched.as_str(),
+                None => {
+                    return Err("无法提取房间信息 (group 1 不存在)".into());
+                }
+            },
+            None => {
+                return Err("无法匹配房间信息，可能直播间地址无效或页面结构已变化".into());
+            }
+        };
         // 替换里面的双引号,方便json解析
         let room_info = String::from(main_info) + "}";
         self.room_info = room_info.replace(r#"\""#, r#"""#);
