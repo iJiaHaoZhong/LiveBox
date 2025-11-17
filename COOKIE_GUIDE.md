@@ -4,7 +4,32 @@
 
 抖音可能会对未登录的访问进行限制，返回 "Access Denied" 错误。通过使用登录后的 Cookie，可以绕过这些限制，正常访问直播间信息。
 
-## 方法一：使用应用内置功能（推荐 - 全自动）
+## 🎯 最佳使用方式：智能自动检测（零配置）
+
+**用户无需任何额外操作！**
+
+程序会自动检测 Access Denied 错误，并返回特殊错误码。前端捕获后自动打开登录窗口。
+
+**前端示例代码：**
+```javascript
+async function getLiveInfo(url) {
+  try {
+    return await invoke('get_live_html', { url });
+  } catch (error) {
+    if (error === 'ACCESS_DENIED_NEED_LOGIN') {
+      // 自动打开登录窗口
+      await invoke('open_login_page');
+      // 等待用户登录后重试
+      return await invoke('get_live_html', { url });
+    }
+    throw error;
+  }
+}
+```
+
+**详细的自动化示例请查看：[AUTOMATIC_LOGIN_EXAMPLE.md](./AUTOMATIC_LOGIN_EXAMPLE.md)**
+
+## 方法一：手动打开登录窗口（全自动提取）
 
 ### 步骤 1: 打开登录窗口
 

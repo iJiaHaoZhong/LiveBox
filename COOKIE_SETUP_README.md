@@ -74,7 +74,44 @@ await invoke('open_login_page');
 
 ## 使用流程
 
-### 方式一：全自动流程（推荐）
+### 方式一：智能自动流程（最推荐）⭐
+
+**完全自动化，用户只需要正常使用即可！**
+
+```javascript
+import { invoke } from '@tauri-apps/api';
+
+// 直接访问直播间
+try {
+  const liveInfo = await invoke('get_live_html', {
+    url: 'https://live.douyin.com/913642684249'
+  });
+  console.log('成功:', liveInfo);
+} catch (error) {
+  // 如果返回 ACCESS_DENIED_NEED_LOGIN 错误
+  if (error === 'ACCESS_DENIED_NEED_LOGIN') {
+    // 自动打开登录窗口
+    await invoke('open_login_page');
+
+    // 用户在窗口中登录后，Cookie 自动保存
+    // 然后可以重试
+    console.log('请在打开的窗口中登录');
+  }
+}
+```
+
+**工作流程：**
+1. 前端尝试访问直播间
+2. 如果没有 Cookie，后端返回 `ACCESS_DENIED_NEED_LOGIN` 错误
+3. 前端捕获错误，自动调用 `open_login_page`
+4. 用户登录，Cookie 自动保存
+5. 前端重试请求，成功！
+
+**更多自动化示例请查看：[AUTOMATIC_LOGIN_EXAMPLE.md](./AUTOMATIC_LOGIN_EXAMPLE.md)**
+
+### 方式二：手动打开登录窗口
+
+如果需要提前登录，可以手动打开：
 
 ```javascript
 import { invoke } from '@tauri-apps/api';
@@ -95,7 +132,7 @@ await invoke('open_login_page');
 const liveInfo = await invoke('get_live_html', { url: 'https://live.douyin.com/913642684249' });
 ```
 
-### 方式二：手动流程
+### 方式三：手动复制 Cookie
 
 如果自动流程失败，可以使用手动方式：
 

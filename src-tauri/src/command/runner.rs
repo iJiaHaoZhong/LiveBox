@@ -107,6 +107,14 @@ impl DouYinReq {
         }
         // 获取cookie里面的ttwid
         let body = response.text().await?;
+
+        // 检测是否为 Access Denied 错误
+        if body.contains("Access Denied") || body.contains("X-TT-System-Error") {
+            println!("❌ 检测到 Access Denied 错误，需要登录");
+            println!("💡 提示: 请调用 open_login_page 命令登录抖音账号");
+            return Err(crate::command::model::ERROR_ACCESS_DENIED.into());
+        }
+
         // println!("获取的直播间HTML内容是：{}", body);
         // 判断是不是已经停播了，是的话仅获取主播头像
         // 使用正则表达式匹配直播间信息
