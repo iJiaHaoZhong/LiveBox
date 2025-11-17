@@ -38,7 +38,7 @@
                     <div class="customer">
                         在线观众：{{ liveInfo.customer }}
                     </div>
-                    <div class="diamond">主播收益：{{ diamond }}</div>
+                    <div class="diamond">主播收益：{{ diamond }} 音浪 (¥{{ diamondRMB }})</div>
                 </div>
                 <!-- 视频播放器 -->
                 <div id="dplayer" class="dplayer"></div>
@@ -123,7 +123,7 @@
 <script setup lang="ts">
 import { Setting } from '@element-plus/icons-vue'
 import { invoke } from '@tauri-apps/api/tauri'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { DPlayerImp, LiveInfoImp } from '@/types'
 import Logo from '@/assets/logo.png'
 import { ConnectionConfig } from 'tauri-plugin-websocket-api'
@@ -163,8 +163,13 @@ const liveInfo = ref({
     signature: '',
 })
 
-// 主播收益
+// 主播收益（音浪）
 const diamond = ref(0)
+
+// 计算人民币金额（10 音浪 = 1 元）
+const diamondRMB = computed(() => {
+    return (diamond.value / 10).toFixed(2)
+})
 
 // 推送流地址
 const pushUrl = ref('')
