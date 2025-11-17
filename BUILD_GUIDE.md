@@ -108,17 +108,20 @@ npm install
 开发模式下可以实时预览修改效果：
 
 ```bash
-# 启动开发服务器
-npm run dev
+# ✅ 正确：启动 Tauri 桌面应用（推荐）
+npm run tauri dev
+
+# ⚠️ 注意：不要使用 npm run dev（只启动浏览器，缺少 Tauri 功能）
 ```
 
 这会同时启动：
 - Vite 开发服务器（前端热重载）
-- Tauri 开发窗口（桌面应用）
+- Tauri 桌面应用窗口（完整的桌面功能）
 
 **注意**：
 - 首次运行会编译 Rust 代码，可能需要 5-10 分钟
 - 后续运行会快很多（增量编译）
+- 必须使用 `npm run tauri dev` 而不是 `npm run dev`，否则会缺少 Tauri IPC 功能
 
 ---
 
@@ -128,7 +131,10 @@ npm run dev
 
 ```bash
 # 构建完整的应用程序
-npm run build
+npm run tauri build
+
+# 或者使用调试版本（更快但文件更大）
+npm run tauri debug
 ```
 
 ### 查找编译产物
@@ -328,11 +334,22 @@ cd ..
 npm run build
 ```
 
-### Q3: 开发模式启动后白屏
+### Q3: 开发模式启动后白屏或报错 "window.__TAURI_IPC__ is not a function"
+
+**原因**: 使用了错误的启动命令
 
 **解决方案**:
-1. 检查终端是否有错误信息
-2. 确认 Node.js 版本 >= 16
+```bash
+# ❌ 不要使用这个（只启动浏览器）
+npm run dev
+
+# ✅ 使用这个（启动 Tauri 桌面应用）
+npm run tauri dev
+```
+
+其他检查：
+1. 确认 Node.js 版本 >= 16
+2. 确认 Rust 已正确安装
 3. 清理并重新安装依赖
 4. 检查防火墙是否阻止了本地端口
 
