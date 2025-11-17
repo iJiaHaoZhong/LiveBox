@@ -52,25 +52,70 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 nvm install 18
 ```
 
-### 2. 安装 Rust (Tauri 依赖)
+### 2. 安装 Rust (Tauri 必需依赖)
+
+**⚠️ 重要：Tauri 必须依赖 Rust，不安装无法运行！**
+
+#### macOS 安装 Rust
 
 ```bash
-# Windows/macOS/Linux 通用
+# 1. 安装 Rust（推荐方式）
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# 安装完成后，重启终端或运行:
+# 2. 按照提示选择默认安装（输入 1 然后回车）
+
+# 3. 安装完成后，重启终端或运行以下命令使环境变量生效：
 source $HOME/.cargo/env
+
+# 4. 验证安装是否成功：
+cargo --version
+rustc --version
 ```
+
+#### Windows 安装 Rust
+
+```bash
+# 方法 1：使用 rustup-init.exe（推荐）
+# 访问 https://rustup.rs/ 下载 rustup-init.exe 并运行
+
+# 方法 2：使用命令行
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 安装完成后重启终端
+```
+
+#### Linux 安装 Rust
+
+```bash
+# Ubuntu/Debian/其他发行版通用
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 安装完成后运行：
+source $HOME/.cargo/env
+
+# 验证安装：
+cargo --version
+```
+
+**如果遇到 "failed to get cargo metadata" 错误，说明 Rust 未安装或未配置到 PATH 中。**
 
 ### 3. 安装平台特定依赖
 
+#### macOS
+
+```bash
+# 安装 Xcode Command Line Tools（必需）
+xcode-select --install
+
+# 如果提示已安装，继续下一步
+```
+
+**注意**：如果 `xcode-select --install` 提示已安装，但 Rust 编译时出错，可能需要完整的 Xcode：
+- 从 App Store 安装 Xcode
+- 或者运行：`sudo xcode-select --reset`
+
 #### Windows
 安装 [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-
-#### macOS
-```bash
-xcode-select --install
-```
 
 #### Linux (Ubuntu/Debian)
 ```bash
@@ -318,7 +363,36 @@ npm install -g cnpm --registry=https://registry.npmmirror.com
 cnpm install
 ```
 
-### Q2: Rust 编译失败
+### Q2: "failed to get cargo metadata" 或 Rust 未找到
+
+**原因**: Rust 未安装或环境变量未配置
+
+**解决方案**:
+```bash
+# 1. 检查 Rust 是否安装
+cargo --version
+rustc --version
+
+# 2. 如果提示 "command not found"，说明未安装，请执行：
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 3. 安装完成后，重启终端或运行：
+source $HOME/.cargo/env
+
+# 4. macOS 用户：如果还是不行，添加到 shell 配置文件
+# 对于 zsh (macOS 默认)：
+echo 'source $HOME/.cargo/env' >> ~/.zshrc
+source ~/.zshrc
+
+# 对于 bash：
+echo 'source $HOME/.cargo/env' >> ~/.bash_profile
+source ~/.bash_profile
+
+# 5. 再次验证
+cargo --version
+```
+
+### Q2.2: Rust 编译失败（已安装 Rust 的情况）
 
 **解决方案**:
 ```bash
@@ -331,7 +405,7 @@ cargo clean
 cd ..
 
 # 重新编译
-npm run build
+npm run tauri build
 ```
 
 ### Q3: 开发模式启动后白屏或报错 "window.__TAURI_IPC__ is not a function"
