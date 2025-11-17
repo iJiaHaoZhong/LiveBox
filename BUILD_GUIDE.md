@@ -26,6 +26,10 @@
 - **Rust**: 1.70+ (Tauri 需要)
 - **Python**: 3.8+ (用于接收服务器，可选)
 
+### 硬件要求
+- **可用磁盘空间**: 至少 10 GB（Rust 编译需要大量临时空间）
+- **内存**: 建议 4 GB 或以上
+
 ---
 
 ## 环境准备
@@ -493,6 +497,35 @@ lsof -i :5000
 # 如果端口被占用，可以修改 example_receiver.py 中的端口号：
 # app.run(host='0.0.0.0', port=5001, debug=True)  # 改为 5001 或其他端口
 ```
+
+### Q8: Rust 编译失败 "No space left on device"
+
+**原因**: 磁盘空间不足
+
+**解决方案**:
+```bash
+# 1. 检查磁盘空间
+df -h
+
+# 2. 清理项目编译缓存（推荐 - 最快）
+cd /path/to/LiveBox
+rm -rf src-tauri/target
+
+# 3. 清理全局 Rust 缓存（如果空间仍不足）
+rm -rf ~/.cargo/registry/cache
+rm -rf ~/.cargo/git/checkouts
+
+# 4. 清理其他缓存
+brew cleanup                # Homebrew 缓存
+npm cache clean --force     # npm 缓存
+
+# 5. 清空废纸篓，删除不需要的文件
+
+# 6. 释放空间后重新编译
+npm run tauri dev
+```
+
+**最低空间要求**: 建议至少有 10 GB 可用磁盘空间用于 Rust 编译
 
 ---
 
