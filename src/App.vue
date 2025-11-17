@@ -38,7 +38,11 @@
                     <div class="customer">
                         在线观众：{{ liveInfo.customer }}
                     </div>
+<<<<<<< HEAD
                     <div class="diamond">主播收益：{{ diamond }} 音浪 (¥{{ diamondRMB }})</div>
+=======
+                    <div class="diamond">主播收益：{{ diamond }} 音浪 (到手 ¥{{ diamondRMB }})</div>
+>>>>>>> da29938 (Update revenue display to show actual income after 50% platform commission - displays amount streamer actually receives)
                 </div>
                 <!-- 视频播放器 -->
                 <div id="dplayer" class="dplayer"></div>
@@ -166,9 +170,11 @@ const liveInfo = ref({
 // 主播收益（音浪）
 const diamond = ref(0)
 
-// 计算人民币金额（10 音浪 = 1 元）
+// 计算主播实际到手金额（10 音浪 = 1 元，平台抽成 50%）
 const diamondRMB = computed(() => {
-    return (diamond.value / 10).toFixed(2)
+    const totalRMB = diamond.value / 10  // 礼物总价值
+    const actualIncome = totalRMB * 0.5  // 主播实际到手（50%）
+    return actualIncome.toFixed(2)
 })
 
 // 推送流地址
