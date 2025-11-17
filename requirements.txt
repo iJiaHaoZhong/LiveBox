@@ -1,0 +1,13 @@
+# Python 依赖包列表
+
+# WebSocket 客户端
+websockets>=12.0
+
+# HTTP 请求
+requests>=2.31.0
+
+# Protocol Buffers (如果使用完整的消息解析)
+protobuf>=4.25.0
+
+# 可选: 执行 JavaScript 代码用于签名生成
+# PyExecJS>=1.5.1
