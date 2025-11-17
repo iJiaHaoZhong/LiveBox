@@ -173,10 +173,10 @@ const diamondRMB = computed(() => {
     return actualIncome.toFixed(2)
 })
 
-// 推送流地址
-const pushUrl = ref('')
-// 选中消息类型
-const checkList = ref<string[]>(['chat', 'gift', 'like'])
+// 推送流地址（默认地址）
+const pushUrl = ref('http://localhost:5001/webhook')
+// 选中消息类型（默认只推送聊天消息）
+const checkList = ref<string[]>(['chat'])
 // 录制视频
 const recordVideo = ref<string[]>([])
 
