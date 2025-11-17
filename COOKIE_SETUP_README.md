@@ -74,23 +74,42 @@ await invoke('open_login_page');
 
 ## 使用流程
 
-### 完整流程示例
+### 方式一：全自动流程（推荐）
 
 ```javascript
 import { invoke } from '@tauri-apps/api';
 
-// 1. 打开登录窗口（可选）
+// 1. 打开登录窗口
 await invoke('open_login_page');
 
-// 2. 用户在打开的窗口中登录，然后在浏览器控制台运行：
-// copy(document.cookie);
-// 复制剪贴板中的 Cookie
+// 2. 用户在打开的窗口中登录（扫码或账号密码）
 
-// 3. 保存 Cookie
+// 3. 登录成功后，程序会自动：
+//    - 检测登录状态
+//    - 提取 Cookie
+//    - 保存 Cookie
+//    - 显示成功提示
+//    - 3 秒后关闭窗口
+
+// 4. 之后访问直播间时，程序会自动使用保存的 Cookie
+const liveInfo = await invoke('get_live_html', { url: 'https://live.douyin.com/913642684249' });
+```
+
+### 方式二：手动流程
+
+如果自动流程失败，可以使用手动方式：
+
+```javascript
+import { invoke } from '@tauri-apps/api';
+
+// 1. 在浏览器中登录 douyin.com，在控制台运行：
+// copy(document.cookie);
+
+// 2. 手动保存 Cookie
 const cookieString = "从浏览器复制的 Cookie 字符串";
 await invoke('save_cookies', { cookieString });
 
-// 4. 之后访问直播间时，程序会自动使用保存的 Cookie
+// 3. 之后访问直播间时，程序会自动使用保存的 Cookie
 const liveInfo = await invoke('get_live_html', { url: 'https://live.douyin.com/913642684249' });
 ```
 
@@ -128,10 +147,50 @@ src-tauri/src/
 │   ├── cookie.rs          # Cookie 管理命令
 │   ├── runner.rs          # 修改：加载和使用 Cookie
 │   └── mod.rs             # 添加 cookie 模块
+├── inject/
+│   └── cookie_extractor.js # JavaScript 注入脚本：自动检测登录并提取 Cookie
 ├── utils/
 │   ├── cookie_store.rs    # Cookie 存储和加载逻辑
 │   └── mod.rs
 └── main.rs                # 注册新命令
+```
+
+### 自动提取工作原理
+
+当调用 `open_login_page` 时：
+
+1. **打开登录窗口**：创建一个新的 Tauri 窗口，访问 douyin.com
+2. **注入 JavaScript 脚本**：`cookie_extractor.js` 会被自动注入到页面中
+3. **监听登录状态**：脚本每秒检查一次是否有登录相关的 Cookie
+4. **检测关键 Cookie**：
+   - `sessionid` - 会话 ID
+   - `passport_auth_token` - 认证令牌
+   - `odin_tt` - 抖音追踪 Token
+   - `__ac_signature` - 防爬虫签名
+5. **自动提取和保存**：检测到任一关键 Cookie 后：
+   - 提取所有 Cookie
+   - 调用 Tauri 后端的 `save_cookies` 命令
+   - 显示成功提示
+   - 3 秒后自动关闭窗口
+
+**核心代码：**
+
+```javascript
+// cookie_extractor.js
+function checkLoginStatus() {
+    const cookies = document.cookie;
+    const hasSessionId = cookies.includes('sessionid=');
+    const hasPassportToken = cookies.includes('passport_auth_token=');
+
+    if (hasSessionId || hasPassportToken) {
+        // 自动保存 Cookie
+        window.__TAURI__.invoke('save_cookies', { cookieString: cookies });
+        // 显示成功提示并关闭窗口
+    }
+}
+
+// 每秒检查一次
+setInterval(checkLoginStatus, 1000);
 ```
 
 ### Cookie 数据结构

@@ -4,7 +4,7 @@
 
 抖音可能会对未登录的访问进行限制，返回 "Access Denied" 错误。通过使用登录后的 Cookie，可以绕过这些限制，正常访问直播间信息。
 
-## 方法一：使用应用内置功能（推荐）
+## 方法一：使用应用内置功能（推荐 - 全自动）
 
 ### 步骤 1: 打开登录窗口
 
@@ -20,36 +20,17 @@ await invoke('open_login_page');
 1. 使用手机扫码登录，或使用账号密码登录
 2. 确保登录成功
 
-### 步骤 3: 获取 Cookie
+### 步骤 3: 自动完成！
 
-登录成功后，打开浏览器的开发者工具（F12），然后：
+**无需任何手动操作！**
 
-**Chrome/Edge 浏览器：**
-1. 打开开发者工具 (F12)
-2. 切换到 "Application" (应用) 标签
-3. 在左侧栏找到 "Cookies" -> "https://www.douyin.com"
-4. 选择所有 Cookie 条目
-5. 复制所有 Cookie 的 `name=value` 对，用分号分隔
+- 登录成功后，程序会**自动检测**到登录状态
+- **自动提取** Cookie
+- **自动保存** Cookie 到本地
+- 显示 "✅ 登录成功！Cookie 已自动保存" 提示
+- 3 秒后**自动关闭**登录窗口
 
-**或者使用控制台快速复制：**
-1. 打开开发者工具 (F12)
-2. 切换到 "Console" (控制台) 标签
-3. 粘贴并运行以下代码：
-
-```javascript
-// 复制所有 Cookie 到剪贴板
-copy(document.cookie);
-console.log('Cookie 已复制到剪贴板！');
-```
-
-### 步骤 4: 保存 Cookie
-
-在应用中调用 `save_cookies` 命令，传入复制的 Cookie 字符串：
-
-```javascript
-const cookieString = "your_cookie_string_here";
-await invoke('save_cookies', { cookieString });
-```
+**就这么简单！** 用户只需要登录，程序会自动处理剩下的一切。
 
 ## 方法二：手动从浏览器获取
 

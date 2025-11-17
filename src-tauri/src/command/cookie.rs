@@ -109,15 +109,16 @@ pub async fn open_login_page(handle: AppHandle) -> Result<String, String> {
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
-    // 创建新窗口
+    // 创建新窗口，注入自动提取 Cookie 的脚本
     match tauri::WindowBuilder::new(
         &handle,
         window_label,
         tauri::WindowUrl::External("https://www.douyin.com/".parse().unwrap()),
     )
-    .title("抖音登录 - 登录后请复制浏览器的所有 Cookie")
+    .title("抖音登录 - 登录后 Cookie 会自动保存")
     .inner_size(1200.0, 800.0)
     .center()
+    .initialization_script(include_str!("../inject/cookie_extractor.js"))
     .build()
     {
         Ok(_) => Ok("登录窗口已打开，请在浏览器中登录抖音".to_string()),
