@@ -3,6 +3,7 @@
 
 // 对command单独管理
 mod command;
+mod utils;
 
 fn main() {
     tauri::Builder::default()
@@ -10,7 +11,11 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             command::live::get_live_html,
             command::live::greet_you,
-            command::live::open_window
+            command::live::open_window,
+            command::cookie::save_cookies,
+            command::cookie::load_cookies,
+            command::cookie::clear_cookies,
+            command::cookie::open_login_page
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

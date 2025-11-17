@@ -1,4 +1,5 @@
 use crate::command::model::LiveInfo;
+use crate::utils::cookie_store::CookieStore;
 use regex::Regex;
 use reqwest::Client;
 
@@ -49,6 +50,28 @@ impl DouYinReq {
 
         // 第二步：使用获取的 Cookie 访问直播间页面
         println!("步骤2: 使用 Cookie 访问直播间...");
+
+        // 尝试加载用户保存的 Cookie
+        let saved_cookies = if let Ok(cookie_path) = CookieStore::get_default_path() {
+            if cookie_path.exists() {
+                match CookieStore::load_from_file(&cookie_path) {
+                    Ok(store) => {
+                        println!("✓ 成功加载 {} 个已保存的用户 Cookie", store.cookies.len());
+                        Some(store.to_cookie_string())
+                    }
+                    Err(e) => {
+                        println!("⚠ 加载保存的 Cookie 失败: {}", e);
+                        None
+                    }
+                }
+            } else {
+                println!("ℹ 未找到保存的 Cookie 文件，使用默认请求");
+                None
+            }
+        } else {
+            None
+        };
+
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7".parse()?);
         headers.insert("accept-language", "zh-CN,zh;q=0.9,en;q=0.8".parse()?);
@@ -64,6 +87,12 @@ impl DouYinReq {
         headers.insert("sec-fetch-user", "?1".parse()?);
         headers.insert("upgrade-insecure-requests", "1".parse()?);
         headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+
+        // 如果有保存的 Cookie，添加到请求头
+        if let Some(cookie_str) = saved_cookies {
+            headers.insert("cookie", cookie_str.parse()?);
+            println!("✓ 已将保存的 Cookie 添加到请求头");
+        }
 
         let request = self.request.get(self.room_url.clone()).headers(headers);
         let response = request.send().await?;
