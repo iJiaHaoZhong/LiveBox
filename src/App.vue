@@ -38,7 +38,7 @@
                     <div class="customer">
                         在线观众：{{ liveInfo.customer }}
                     </div>
-                    <div class="diamond">主播收益：{{ diamond }}</div>
+                    <div class="diamond">主播收益：{{ diamond }} 音浪 (到手 ¥{{ diamondRMB }})</div>
                 </div>
                 <!-- 视频播放器 -->
                 <div id="dplayer" class="dplayer"></div>
@@ -123,7 +123,7 @@
 <script setup lang="ts">
 import { Setting } from '@element-plus/icons-vue'
 import { invoke } from '@tauri-apps/api/tauri'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { DPlayerImp, LiveInfoImp } from '@/types'
 import Logo from '@/assets/logo.png'
 import { ConnectionConfig } from 'tauri-plugin-websocket-api'
@@ -163,13 +163,20 @@ const liveInfo = ref({
     signature: '',
 })
 
-// 主播收益
+// 主播收益（音浪）
 const diamond = ref(0)
 
-// 推送流地址
-const pushUrl = ref('')
-// 选中消息类型
-const checkList = ref<string[]>(['chat', 'gift', 'like'])
+// 计算主播实际到手金额（10 音浪 = 1 元，平台抽成 50%）
+const diamondRMB = computed(() => {
+    const totalRMB = diamond.value / 10  // 礼物总价值
+    const actualIncome = totalRMB * 0.5  // 主播实际到手（50%）
+    return actualIncome.toFixed(2)
+})
+
+// 推送流地址（默认地址）
+const pushUrl = ref('http://localhost:5001/webhook')
+// 选中消息类型（默认只推送聊天消息）
+const checkList = ref<string[]>(['chat'])
 // 录制视频
 const recordVideo = ref<string[]>([])
 
@@ -485,7 +492,11 @@ const decodeChat = (data) => {
         msg: content,
     }
     checkList.value.includes('chat') && messageList.value.push(message)
-    // console.log('chatMsg---', user.nickName, content)
+
+    // 推送到配置的 URL
+    if (pushUrl.value && checkList.value.includes('chat')) {
+        pushMessageToUrl('chat', message, chatMsg)
+    }
 }
 // 解析礼物消息
 const decodeGift = (data) => {
@@ -500,6 +511,11 @@ const decodeGift = (data) => {
     checkList.value.includes('gift') && messageList.value.push(message)
     // 计算主播收益
     diamond.value = diamond.value + gift.diamondCount * repeatCount
+
+    // 推送到配置的 URL
+    if (pushUrl.value && checkList.value.includes('gift')) {
+        pushMessageToUrl('gift', message, giftMsg)
+    }
 }
 
 // 进入房间
@@ -512,7 +528,11 @@ const enterLive = (data) => {
         msg: '来了',
     }
     checkList.value.includes('comein') && messageList.value.push(message)
-    // console.log('enterLive---', enteryMsg)
+
+    // 推送到配置的 URL
+    if (pushUrl.value && checkList.value.includes('comein')) {
+        pushMessageToUrl('comein', message, enteryMsg)
+    }
 }
 
 // 点赞消息
@@ -530,6 +550,11 @@ const likeLive = (data) => {
         totalLike: total,
     }
     checkList.value.includes('like') && messageList.value.push(message)
+
+    // 推送到配置的 URL
+    if (pushUrl.value && checkList.value.includes('like')) {
+        pushMessageToUrl('like', message, likeMsg)
+    }
 }
 
 // 关注主播
@@ -546,6 +571,40 @@ const followLive = (data) => {
         fans: followCount,
     }
     checkList.value.includes('follow') && messageList.value.push(message)
+
+    // 推送到配置的 URL
+    if (pushUrl.value && checkList.value.includes('follow')) {
+        pushMessageToUrl('follow', message, followMsg)
+    }
+}
+
+// 推送消息到配置的 URL
+const pushMessageToUrl = async (type, message, rawData) => {
+    if (!pushUrl.value) return
+
+    try {
+        const payload = {
+            type: type,
+            data: message,
+            raw: rawData,
+            timestamp: Date.now(),
+            room_id: liveInfo.value.roomId,
+        }
+
+        const response = await fetch(pushUrl.value, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        })
+
+        if (!response.ok) {
+            console.error('推送失败:', response.status, response.statusText)
+        }
+    } catch (error) {
+        console.error('推送消息到URL失败:', error)
+    }
 }
 
 // 直播间统计
