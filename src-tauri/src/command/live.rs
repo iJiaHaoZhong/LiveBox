@@ -1,7 +1,5 @@
 use crate::command::model::{LiveInfo, ERROR_ACCESS_DENIED};
 use crate::command::runner::DouYinReq;
-use std::io::Read;
-use std::time::Instant;
 use tauri::{AppHandle, Manager};
 
 // 自定义函数
