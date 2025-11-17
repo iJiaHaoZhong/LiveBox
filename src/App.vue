@@ -38,11 +38,7 @@
                     <div class="customer">
                         在线观众：{{ liveInfo.customer }}
                     </div>
-<<<<<<< HEAD
-                    <div class="diamond">主播收益：{{ diamond }} 音浪 (¥{{ diamondRMB }})</div>
-=======
                     <div class="diamond">主播收益：{{ diamond }} 音浪 (到手 ¥{{ diamondRMB }})</div>
->>>>>>> da29938 (Update revenue display to show actual income after 50% platform commission - displays amount streamer actually receives)
                 </div>
                 <!-- 视频播放器 -->
                 <div id="dplayer" class="dplayer"></div>
