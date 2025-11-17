@@ -1,5 +1,9 @@
 # Python 依赖包列表
 
+# Flask Web 框架 (用于接收服务器)
+flask>=3.0.0
+flask-cors>=4.0.0
+
 # WebSocket 客户端
 websockets>=12.0
 

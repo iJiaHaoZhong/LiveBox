@@ -5,10 +5,12 @@ LiveBox 推送消息接收服务器示例
 """
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from datetime import datetime
 import json
 
 app = Flask(__name__)
+CORS(app)  # 启用 CORS 支持，允许跨域请求
 
 # 消息处理器字典
 message_handlers = {}
