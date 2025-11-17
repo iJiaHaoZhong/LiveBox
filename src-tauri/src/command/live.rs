@@ -34,7 +34,7 @@ pub async fn open_window(
     resize: bool,
     width: f64,
     height: f64,
-    js_content: String,
+    _js_content: String,
 ) {
     let window_label = "previewWeb";
     // if let Some(existing_window) = handle.get_window(window_label) {

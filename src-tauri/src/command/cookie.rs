@@ -1,5 +1,5 @@
 use crate::utils::cookie_store::CookieStore;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 /// 保存用户提供的 cookie 字符串
 #[tauri::command]
