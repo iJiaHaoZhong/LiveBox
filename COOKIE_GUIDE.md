@@ -4,30 +4,26 @@
 
 抖音可能会对未登录的访问进行限制，返回 "Access Denied" 错误。通过使用登录后的 Cookie，可以绕过这些限制，正常访问直播间信息。
 
-## 🎯 最佳使用方式：智能自动检测（零配置）
+## 🎯 最佳使用方式：完全自动化（零代码，零配置）⭐
 
-**用户无需任何额外操作！**
+**后端自动处理一切！前端完全不需要写任何错误处理代码！**
 
-程序会自动检测 Access Denied 错误，并返回特殊错误码。前端捕获后自动打开登录窗口。
-
-**前端示例代码：**
 ```javascript
-async function getLiveInfo(url) {
-  try {
-    return await invoke('get_live_html', { url });
-  } catch (error) {
-    if (error === 'ACCESS_DENIED_NEED_LOGIN') {
-      // 自动打开登录窗口
-      await invoke('open_login_page');
-      // 等待用户登录后重试
-      return await invoke('get_live_html', { url });
-    }
-    throw error;
-  }
-}
+// 就这一行！不需要 try-catch，不需要错误处理
+const liveInfo = await invoke('get_live_html', { url: 'https://live.douyin.com/913642684249' });
+console.log('直播间信息:', liveInfo);
 ```
 
-**详细的自动化示例请查看：[AUTOMATIC_LOGIN_EXAMPLE.md](./AUTOMATIC_LOGIN_EXAMPLE.md)**
+**工作原理：**
+1. 后端检测到 Access Denied
+2. **自动打开登录窗口**
+3. 用户登录（扫码或密码）
+4. Cookie 自动保存
+5. 窗口自动关闭
+6. **后端自动重试**
+7. ✅ 返回成功结果
+
+**完整说明请查看：[FULLY_AUTOMATIC_LOGIN.md](./FULLY_AUTOMATIC_LOGIN.md)** ⭐⭐⭐
 
 ## 方法一：手动打开登录窗口（全自动提取）
 

@@ -1,8 +1,8 @@
-use crate::command::model::LiveInfo;
+use crate::command::model::{LiveInfo, ERROR_ACCESS_DENIED};
 use crate::command::runner::DouYinReq;
 use std::io::Read;
 use std::time::Instant;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 // 自定义函数
 #[tauri::command]
@@ -12,15 +12,107 @@ pub async fn greet_you(name: &str) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn get_live_html(url: &str) -> Result<LiveInfo, String> {
-    // let response = reqwest::get(live_url).await.unwrap();
-    // println!("调用了get_live_html");
+pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, String> {
     let mut live_req = DouYinReq::new(url);
-    // 获取直播间room_id和主播信息
+
+    // 第一次尝试获取直播间信息
     let result = live_req.get_room_info().await;
+
     match result {
         Ok(info) => Ok(info),
-        Err(_) => Err("This failed!".into()),
+        Err(e) => {
+            let error_msg = e.to_string();
+
+            // 检查是否为 Access Denied 错误
+            if error_msg == ERROR_ACCESS_DENIED {
+                println!("🔐 检测到需要登录，自动打开登录窗口...");
+
+                // 自动打开登录窗口
+                let window_label = "douyinLogin";
+
+                // 如果窗口已存在，先关闭
+                if let Some(existing_window) = handle.get_window(window_label) {
+                    let _ = existing_window.close();
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                }
+
+                // 创建新窗口
+                match tauri::WindowBuilder::new(
+                    &handle,
+                    window_label,
+                    tauri::WindowUrl::External("https://www.douyin.com/".parse().unwrap()),
+                )
+                .title("抖音登录 - 登录后 Cookie 会自动保存")
+                .inner_size(1200.0, 800.0)
+                .center()
+                .initialization_script(include_str!("../inject/cookie_extractor.js"))
+                .build()
+                {
+                    Ok(_) => {
+                        println!("✅ 登录窗口已打开");
+                        println!("⏳ 等待用户登录...");
+                        println!("💡 提示: 请在打开的窗口中登录，登录成功后窗口会自动关闭");
+
+                        // 等待窗口关闭（最多等待 60 秒）
+                        let mut attempts = 0;
+                        let max_attempts = 120; // 60秒 (每次检查间隔 500ms)
+
+                        loop {
+                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+                            // 检查窗口是否还存在
+                            if handle.get_window(window_label).is_none() {
+                                println!("✅ 登录窗口已关闭");
+                                break;
+                            }
+
+                            attempts += 1;
+                            if attempts >= max_attempts {
+                                println!("⏱ 等待超时（60秒），窗口仍未关闭");
+                                return Err("等待登录超时，请重试".into());
+                            }
+
+                            // 每 10 秒提示一次
+                            if attempts % 20 == 0 {
+                                let seconds = attempts / 2;
+                                println!("⏳ 已等待 {} 秒，请尽快完成登录...", seconds);
+                            }
+                        }
+
+                        // 等待额外 1 秒确保 Cookie 已保存到文件
+                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+                        println!("🔄 重试获取直播间信息...");
+
+                        // 重新创建请求（使用新的 Cookie）
+                        let mut retry_req = DouYinReq::new(url);
+                        let retry_result = retry_req.get_room_info().await;
+
+                        match retry_result {
+                            Ok(info) => {
+                                println!("✅ 登录成功，成功获取直播间信息！");
+                                Ok(info)
+                            }
+                            Err(retry_error) => {
+                                let retry_msg = retry_error.to_string();
+                                if retry_msg == ERROR_ACCESS_DENIED {
+                                    Err("登录可能未完成或失败，请重试".into())
+                                } else {
+                                    Err(format!("重试失败: {}", retry_msg))
+                                }
+                            }
+                        }
+                    }
+                    Err(window_err) => {
+                        eprintln!("❌ 打开登录窗口失败: {}", window_err);
+                        Err(format!("无法打开登录窗口: {}", window_err))
+                    }
+                }
+            } else {
+                // 其他错误直接返回
+                Err(error_msg)
+            }
+        }
     }
 }
 
