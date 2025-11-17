@@ -67,18 +67,41 @@ impl DouYinReq {
         } else {
             // 使用正则表达式匹配直播间信息
             re = Regex::new(r#"roomInfo\\":\{\\"room\\":(.*?),\\"toolbar_data"#).unwrap();
-            let unique_re = Regex::new(r#"user_unique_id\\":\\"(.*?)\\"}"#).unwrap();
 
-            // 安全地获取 unique_id，避免 panic
-            if let Some(captures) = unique_re.captures(&body) {
-                if let Some(matched) = captures.get(1) {
-                    unique_id = matched.as_str();
-                    println!("成功提取 unique_id: {}", unique_id);
-                } else {
-                    println!("警告: 正则匹配成功但无法获取 group 1");
+            // 尝试多种正则模式来匹配 user_unique_id
+            let patterns = vec![
+                r#"user_unique_id\\":\\"(.*?)\\"}"#,           // 原始模式
+                r#"user_unique_id":"([^"]+)"#,                 // 不带转义的模式
+                r#"user_unique_id\\":\\"([^\\]+)\\"#,         // 更宽松的模式
+                r#""user_unique_id":"([^"]+)""#,               // JSON 格式
+            ];
+
+            // 依次尝试每种模式
+            let mut matched = false;
+            for pattern in patterns.iter() {
+                if let Ok(unique_re) = Regex::new(pattern) {
+                    if let Some(captures) = unique_re.captures(&body) {
+                        if let Some(m) = captures.get(1) {
+                            unique_id = m.as_str();
+                            println!("✓ 成功提取 unique_id: {} (使用模式: {})", unique_id, pattern);
+                            matched = true;
+                            break;
+                        }
+                    }
                 }
-            } else {
-                println!("警告: 无法匹配 user_unique_id，可能页面结构已变化");
+            }
+
+            if !matched {
+                println!("⚠ 警告: 所有正则模式都无法匹配 user_unique_id");
+                println!("  这可能是因为:");
+                println!("  1. 页面结构已变化");
+                println!("  2. 需要登录才能访问");
+                println!("  3. 直播间不存在或已关闭");
+
+                // 输出部分 body 内容用于调试（仅前 500 字符，避免输出过多）
+                let preview_len = 500.min(body.len());
+                println!("  HTML 预览 (前 {} 字符):", preview_len);
+                println!("  {}", &body[..preview_len]);
             }
         }
 
