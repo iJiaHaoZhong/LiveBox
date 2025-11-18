@@ -58,6 +58,18 @@
             console.log('  - 当前 URL:', window.location.href);
             console.log('  - 窗口名称:', window.name);
 
+            // 检查当前 URL 是否为有效的抖音域名
+            const currentUrl = window.location.href;
+            const isValidDomain = currentUrl.includes('douyin.com') ||
+                                 currentUrl.includes('www.douyin.com') ||
+                                 currentUrl.includes('live.douyin.com');
+
+            if (!isValidDomain) {
+                console.log('⏳ 当前页面不是抖音域名 (about:blank 或其他)，等待导航到正确页面...');
+                // 不显示错误，只是静默等待
+                return;
+            }
+
             // 检查 Tauri API 是否可用
             if (typeof window.__TAURI__ === 'undefined' || typeof window.__TAURI__.invoke === 'undefined') {
                 console.error('❌ Tauri API 不可用！');
