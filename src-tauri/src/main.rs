@@ -37,6 +37,26 @@ fn main() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .on_page_load(|window, _payload| {
+            // 确保登录窗口创建后打印日志
+            if window.label() == "douyinLogin" {
+                println!("📱 登录窗口页面已加载: {}", window.label());
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // 全局事件处理 - 防止在登录期间退出应用
+            match event {
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    // 检查是否有登录窗口在运行
+                    if let Some(_login_window) = app_handle.get_window("douyinLogin") {
+                        println!("🛑 检测到退出请求，但登录窗口正在运行");
+                        println!("💡 阻止应用退出，等待登录完成");
+                        api.prevent_exit();
+                    }
+                }
+                _ => {}
+            }
+        });
 }
