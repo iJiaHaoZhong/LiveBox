@@ -98,51 +98,54 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                 }
                             }
 
-                            // 使用 evaluate_script 读取 JavaScript 全局变量
+                            // 读取 URL hash 中的 Cookie（JavaScript 会将 Cookie 写入 hash）
                             if cookie_string.is_none() {
                                 // 每 5 秒打印一次检查状态（用于调试）
                                 if attempts % 10 == 0 && attempts > 0 {
                                     println!("🔍 检查 Cookie 状态 (第 {} 次)", attempts);
                                 }
 
-                                // 检查 JavaScript 是否设置了 Cookie
-                                let check_script = r#"
-                                    (function() {
-                                        if (window.__DOUYIN_COOKIES_READY__ === true && window.__DOUYIN_COOKIES__) {
-                                            return window.__DOUYIN_COOKIES__;
-                                        }
-                                        return null;
-                                    })()
-                                "#;
+                                // 读取窗口 URL
+                                match window.url() {
+                                    Ok(current_url) => {
+                                        let url_str = current_url.to_string();
 
-                                match window.eval(check_script) {
-                                    Ok(result) => {
-                                        // 解析返回的 JSON 值
-                                        if let Ok(result_str) = serde_json::from_str::<serde_json::Value>(&result) {
-                                            if !result_str.is_null() {
-                                                if let Some(cookies) = result_str.as_str() {
-                                                    cookie_string = Some(cookies.to_string());
+                                        // 检查 URL hash 是否包含 Cookie 数据
+                                        if url_str.contains("#__COOKIES__=") {
+                                            // 提取 hash 中的 Cookie 数据
+                                            if let Some(hash_start) = url_str.find("#__COOKIES__=") {
+                                                let cookie_data = &url_str[hash_start + 13..]; // 跳过 "#__COOKIES__="
 
-                                                    println!("🍪 检测到 Cookie！");
-                                                    println!("📝 Cookie 长度: {} 字符", cookies.len());
+                                                // URL 解码
+                                                match urlencoding::decode(cookie_data) {
+                                                    Ok(decoded_cookies) => {
+                                                        let cookies = decoded_cookies.to_string();
+                                                        cookie_string = Some(cookies.clone());
 
-                                                    // 保存 Cookie
-                                                    match crate::command::cookie::save_cookies(cookies.to_string()).await {
-                                                        Ok(msg) => {
-                                                            println!("✅ {}", msg);
+                                                        println!("🍪 检测到 Cookie（从 URL hash）！");
+                                                        println!("📝 Cookie 长度: {} 字符", cookies.len());
+
+                                                        // 保存 Cookie
+                                                        match crate::command::cookie::save_cookies(cookies).await {
+                                                            Ok(msg) => {
+                                                                println!("✅ {}", msg);
+                                                            }
+                                                            Err(err) => {
+                                                                eprintln!("❌ Cookie 保存失败: {}", err);
+                                                            }
                                                         }
-                                                        Err(err) => {
-                                                            eprintln!("❌ Cookie 保存失败: {}", err);
-                                                        }
-                                                    }
 
-                                                    // 关闭窗口
-                                                    println!("🔒 尝试关闭登录窗口...");
-                                                    match window.close() {
-                                                        Ok(_) => println!("✅ 窗口关闭成功"),
-                                                        Err(e) => eprintln!("❌ 窗口关闭失败: {}", e),
+                                                        // 关闭窗口
+                                                        println!("🔒 尝试关闭登录窗口...");
+                                                        match window.close() {
+                                                            Ok(_) => println!("✅ 窗口关闭成功"),
+                                                            Err(e) => eprintln!("❌ 窗口关闭失败: {}", e),
+                                                        }
+                                                        break;
                                                     }
-                                                    break;
+                                                    Err(e) => {
+                                                        eprintln!("❌ URL 解码失败: {}", e);
+                                                    }
                                                 }
                                             }
                                         }
@@ -150,7 +153,7 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                     Err(e) => {
                                         // 每 10 秒打印一次错误（用于调试）
                                         if attempts % 20 == 0 && attempts > 0 {
-                                            println!("⚠️  evaluate_script 错误: {}", e);
+                                            println!("⚠️  无法读取窗口 URL: {}", e);
                                         }
                                     }
                                 }

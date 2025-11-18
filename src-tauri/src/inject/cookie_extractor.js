@@ -62,25 +62,15 @@
                 return;
             }
 
-            // 存储到全局变量供 Rust 端通过 evaluate_script 读取
-            window.__DOUYIN_COOKIES__ = cookieString;
-            window.__DOUYIN_COOKIES_READY__ = true;
+            // 将 Cookie 写入 URL hash 供 Rust 端读取
+            // 使用 URL hash 是可靠的 IPC 机制，因为 Rust 可以通过 window.url() 读取
+            const encodedCookies = encodeURIComponent(cookieString);
+            window.location.hash = '__COOKIES__=' + encodedCookies;
 
             console.log('✅ Cookie 已准备好，正在传递给后端...');
             console.log('🔍 Cookie 数量:', cookieString.split(';').length);
-            console.log('📝 全局变量已设置: window.__DOUYIN_COOKIES_READY__ = true');
-
-            // 定期检查全局变量是否还存在（确保没有被覆盖）
-            const checkInterval = setInterval(() => {
-                if (window.__DOUYIN_COOKIES_READY__ !== true) {
-                    console.warn('⚠️  全局变量被覆盖，重新设置...');
-                    window.__DOUYIN_COOKIES__ = cookieString;
-                    window.__DOUYIN_COOKIES_READY__ = true;
-                }
-            }, 100); // 每100ms检查一次
-
-            // 3秒后停止检查
-            setTimeout(() => clearInterval(checkInterval), 5000);
+            console.log('📝 URL hash 已设置: #__COOKIES__=[Cookie 数据]');
+            console.log('📝 当前 URL:', window.location.href.substring(0, 100) + '...');
 
             // 显示成功提示
             showSuccessMessage();
