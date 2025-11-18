@@ -32,6 +32,28 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
         Err(error_msg) => {
             // 检查是否为 Access Denied 错误
             if error_msg == ERROR_ACCESS_DENIED {
+                // 在打开登录窗口之前，先检查是否已有 Cookie 文件
+                let has_cookie_file = if let Ok(cookie_path) = crate::utils::cookie_store::CookieStore::get_default_path() {
+                    let exists = cookie_path.exists();
+                    if exists {
+                        println!("ℹ️  [get_live_html] 检测到已保存的 Cookie 文件，但访问仍然被拒绝");
+                        println!("💡 [get_live_html] 可能的原因：");
+                        println!("   1. Cookie 已过期，需要重新登录");
+                        println!("   2. 此直播间需要特殊权限");
+                        println!("   3. IP 被限制或需要验证码");
+                        println!("📝 [get_live_html] 建议：请删除 Cookie 文件后重新登录");
+                        println!("   Cookie 文件位置: {:?}", cookie_path);
+                    }
+                    exists
+                } else {
+                    false
+                };
+
+                // 如果已有 Cookie 文件，不再打开登录窗口，直接返回错误
+                if has_cookie_file {
+                    return Err("访问被拒绝：已使用保存的 Cookie 但仍无法访问。Cookie 可能已过期，请删除 Cookie 文件后重试。".into());
+                }
+
                 println!("🔐 [get_live_html] 检测到需要登录，自动打开登录窗口...");
                 println!("🔍 [get_live_html] 准备创建登录窗口");
 
