@@ -74,15 +74,23 @@
             console.log('✅ Cookie 已准备好，正在传递给后端...');
             console.log('🔍 Cookie 数量:', cookieString.split(';').length);
 
-            // 2秒后恢复标题
-            setTimeout(() => {
-                if (document.title.startsWith('__COOKIES_READY__|')) {
-                    document.title = originalTitle;
-                }
-            }, 2000);
-
             // 显示成功提示
             showSuccessMessage();
+
+            // 3秒后自动关闭窗口（备用机制，如果 Rust 没有关闭的话）
+            setTimeout(() => {
+                console.log('🔒 3秒已过，尝试关闭窗口...');
+                try {
+                    window.close();
+                    console.log('✅ 窗口关闭请求已发送');
+                } catch (e) {
+                    console.error('❌ 无法关闭窗口:', e);
+                    // 如果无法关闭，至少恢复标题
+                    if (document.title.startsWith('__COOKIES_READY__|')) {
+                        document.title = originalTitle;
+                    }
+                }
+            }, 3000);
 
         } catch (error) {
             console.error('❌ Cookie 处理失败:', error);

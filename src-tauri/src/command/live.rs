@@ -69,6 +69,16 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                             // 尝试从窗口标题读取 Cookie
                             if cookie_string.is_none() {
                                 if let Ok(title) = window.title() {
+                                    // 每 5 秒打印一次标题（用于调试）
+                                    if attempts % 10 == 0 {
+                                        let title_preview = if title.len() > 50 {
+                                            format!("{}...", &title[..50])
+                                        } else {
+                                            title.clone()
+                                        };
+                                        println!("🔍 当前窗口标题: {}", title_preview);
+                                    }
+
                                     if title.starts_with("__COOKIES_READY__|") {
                                         // 提取 Cookie 字符串
                                         let cookies = title.trim_start_matches("__COOKIES_READY__|");
@@ -88,9 +98,17 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                         }
 
                                         // 关闭窗口
-                                        let _ = window.close();
-                                        println!("🔒 登录窗口已关闭");
+                                        println!("🔒 尝试关闭登录窗口...");
+                                        match window.close() {
+                                            Ok(_) => println!("✅ 窗口关闭成功"),
+                                            Err(e) => eprintln!("❌ 窗口关闭失败: {}", e),
+                                        }
                                         break;
+                                    }
+                                } else {
+                                    // 每 5 秒打印一次无法获取标题的错误
+                                    if attempts % 10 == 0 {
+                                        println!("⚠️  无法获取窗口标题");
                                     }
                                 }
                             }
