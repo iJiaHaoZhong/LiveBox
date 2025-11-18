@@ -58,57 +58,70 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                         let mut cookie_string: Option<String> = None;
 
                         loop {
+                            // 每次循环开始时打印心跳（仅在调试时）
+                            if attempts % 20 == 0 && attempts > 0 {
+                                println!("💓 心跳检测: 循环运行中 (第 {} 次检查)", attempts);
+                            }
+
                             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
                             // 检查窗口是否还存在
-                            if handle.get_window(window_label).is_none() {
-                                println!("✅ 登录窗口已关闭");
-                                break;
+                            match handle.get_window(window_label) {
+                                None => {
+                                    println!("✅ 登录窗口已关闭");
+                                    break;
+                                }
+                                Some(_) => {
+                                    // 窗口仍在，继续检查
+                                }
                             }
 
                             // 尝试从窗口标题读取 Cookie
                             if cookie_string.is_none() {
-                                if let Ok(title) = window.title() {
-                                    // 每 5 秒打印一次标题（用于调试）
-                                    if attempts % 10 == 0 {
-                                        let title_preview = if title.len() > 50 {
-                                            format!("{}...", &title[..50])
-                                        } else {
-                                            title.clone()
-                                        };
-                                        println!("🔍 当前窗口标题: {}", title_preview);
-                                    }
-
-                                    if title.starts_with("__COOKIES_READY__|") {
-                                        // 提取 Cookie 字符串
-                                        let cookies = title.trim_start_matches("__COOKIES_READY__|");
-                                        cookie_string = Some(cookies.to_string());
-
-                                        println!("🍪 检测到 Cookie！");
-                                        println!("📝 Cookie 长度: {} 字符", cookies.len());
-
-                                        // 保存 Cookie
-                                        match crate::command::cookie::save_cookies(cookies.to_string()).await {
-                                            Ok(msg) => {
-                                                println!("✅ {}", msg);
-                                            }
-                                            Err(err) => {
-                                                eprintln!("❌ Cookie 保存失败: {}", err);
-                                            }
+                                match window.title() {
+                                    Ok(title) => {
+                                        // 每 5 秒打印一次标题（用于调试）
+                                        if attempts % 10 == 0 {
+                                            let title_preview = if title.len() > 50 {
+                                                format!("{}...", &title[..50])
+                                            } else {
+                                                title.clone()
+                                            };
+                                            println!("🔍 当前窗口标题: {}", title_preview);
                                         }
 
-                                        // 关闭窗口
-                                        println!("🔒 尝试关闭登录窗口...");
-                                        match window.close() {
-                                            Ok(_) => println!("✅ 窗口关闭成功"),
-                                            Err(e) => eprintln!("❌ 窗口关闭失败: {}", e),
+                                        if title.starts_with("__COOKIES_READY__|") {
+                                            // 提取 Cookie 字符串
+                                            let cookies = title.trim_start_matches("__COOKIES_READY__|");
+                                            cookie_string = Some(cookies.to_string());
+
+                                            println!("🍪 检测到 Cookie！");
+                                            println!("📝 Cookie 长度: {} 字符", cookies.len());
+
+                                            // 保存 Cookie
+                                            match crate::command::cookie::save_cookies(cookies.to_string()).await {
+                                                Ok(msg) => {
+                                                    println!("✅ {}", msg);
+                                                }
+                                                Err(err) => {
+                                                    eprintln!("❌ Cookie 保存失败: {}", err);
+                                                }
+                                            }
+
+                                            // 关闭窗口
+                                            println!("🔒 尝试关闭登录窗口...");
+                                            match window.close() {
+                                                Ok(_) => println!("✅ 窗口关闭成功"),
+                                                Err(e) => eprintln!("❌ 窗口关闭失败: {}", e),
+                                            }
+                                            break;
                                         }
-                                        break;
                                     }
-                                } else {
-                                    // 每 5 秒打印一次无法获取标题的错误
-                                    if attempts % 10 == 0 {
-                                        println!("⚠️  无法获取窗口标题");
+                                    Err(e) => {
+                                        // 每 5 秒打印一次无法获取标题的错误
+                                        if attempts % 10 == 0 {
+                                            println!("⚠️  无法获取窗口标题: {}", e);
+                                        }
                                     }
                                 }
                             }
