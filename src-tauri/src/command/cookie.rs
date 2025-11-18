@@ -152,14 +152,7 @@ pub async fn open_login_page(handle: AppHandle) -> Result<String, String> {
             sleep(Duration::from_secs(1)).await;
 
             // 获取当前 URL
-            let current_url = match window_clone.url() {
-                Ok(url) => url,
-                Err(_) => {
-                    // 窗口可能已关闭
-                    break;
-                }
-            };
-
+            let current_url = window_clone.url();
             let url_str = current_url.to_string();
 
             // 检查是否有 Cookie 数据返回
