@@ -11,10 +11,18 @@ pub async fn greet_you(name: &str) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, String> {
+    println!("🎯 [get_live_html] 开始执行，URL: {}", url);
+    println!("🔍 [get_live_html] 当前窗口列表:");
+    for (label, _) in handle.windows() {
+        println!("   - 窗口: {}", label);
+    }
+
     let mut live_req = DouYinReq::new(url);
 
     // 第一次尝试获取直播间信息
+    println!("📡 [get_live_html] 发起第一次请求...");
     let result = live_req.get_room_info().await;
+    println!("📥 [get_live_html] 第一次请求完成");
 
     // 立即将 Result 转换为 Result<LiveInfo, String>，避免 Send 问题
     let result_string: Result<LiveInfo, String> = result.map_err(|e| e.to_string());
@@ -24,7 +32,8 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
         Err(error_msg) => {
             // 检查是否为 Access Denied 错误
             if error_msg == ERROR_ACCESS_DENIED {
-                println!("🔐 检测到需要登录，自动打开登录窗口...");
+                println!("🔐 [get_live_html] 检测到需要登录，自动打开登录窗口...");
+                println!("🔍 [get_live_html] 准备创建登录窗口");
 
                 // 自动打开登录窗口
                 let window_label = "douyinLogin";
@@ -48,15 +57,17 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                 .build()
                 {
                     Ok(window) => {
-                        println!("✅ 登录窗口已打开");
-                        println!("⏳ 等待用户登录...");
-                        println!("💡 提示: 请在打开的窗口中登录，登录成功后窗口会自动关闭");
+                        println!("✅ [get_live_html] 登录窗口已打开");
+                        println!("⏳ [get_live_html] 等待用户登录...");
+                        println!("💡 [get_live_html] 提示: 请在打开的窗口中登录，登录成功后窗口会自动关闭");
+                        println!("🔧 [get_live_html] 进入等待循环...");
 
                         // 定期检查窗口标题以获取 Cookie（最多等待 120 秒）
                         let mut attempts = 0;
                         let max_attempts = 240; // 120秒 (每次检查间隔 500ms)
                         let mut cookie_string: Option<String> = None;
 
+                        println!("🔄 [get_live_html] 开始轮询检查（每500ms一次）");
                         loop {
                             // 每次循环开始时打印心跳（仅在调试时）
                             if attempts % 20 == 0 && attempts > 0 {
@@ -68,12 +79,13 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                             // 检查窗口是否还存在
                             match handle.get_window(window_label) {
                                 None => {
-                                    println!("✅ 登录窗口已关闭");
+                                    println!("✅ [get_live_html] 登录窗口已关闭，退出循环");
 
                                     // 恢复主窗口
+                                    println!("🔄 [get_live_html] 开始恢复主窗口...");
                                     for (label, win) in handle.windows() {
-                                        if label != "douyinLogin" {
-                                            println!("🔄 恢复主窗口: {}", label);
+                                        if label != "douyinLogin" && label != "daemon" {
+                                            println!("   - 恢复窗口: {}", label);
                                             let _ = win.show();
                                             let _ = win.set_focus();
                                         }
