@@ -7,6 +7,7 @@
     let loginDetected = false;
     let checkCount = 0;
     const MAX_CHECKS = 300; // 最多检查 5 分钟 (每秒检查一次)
+    const MIN_WAIT_TIME = 5; // 最少等待 5 秒后才开始提取 Cookie（给页面足够加载时间）
 
     // 检查是否已登录的函数
     function checkLoginStatus() {
@@ -16,6 +17,14 @@
         if (checkCount > MAX_CHECKS) {
             console.log('⏱ 超时：未检测到登录');
             clearInterval(loginCheckInterval);
+            return;
+        }
+
+        // 强制最小等待时间：防止在页面还在加载时就提取 Cookie
+        if (checkCount < MIN_WAIT_TIME) {
+            if (checkCount === 1) {
+                console.log(`⏳ 强制等待 ${MIN_WAIT_TIME} 秒，确保页面完全加载...`);
+            }
             return;
         }
 
@@ -48,6 +57,19 @@
                                pageHtml.includes('验证码中间页') ||
                                pageHtml.includes('middle_page_loading') ||
                                pageHtml.includes('TTGCaptcha');
+
+        // 每 5 秒输出一次详细状态（用于调试）
+        if (checkCount === MIN_WAIT_TIME || checkCount % 5 === 0) {
+            console.log(`\n========== 状态检查 (${checkCount}秒) ==========`);
+            console.log(`URL: ${currentUrl}`);
+            console.log(`标题: ${pageTitle}`);
+            console.log(`HTML 长度: ${pageHtmlLength}`);
+            console.log(`是否在验证码页面: ${isOnCaptchaPage}`);
+            console.log(`Cookie 数量: ${cookies.split(';').length}`);
+            console.log(`页面已加载: ${isPageLoaded}`);
+            console.log(`URL 有效: ${isValidUrl}`);
+            console.log(`===================================\n`);
+        }
 
         // 只有在【不在验证码页面】时才检测Cookie
         // 这样可以避免提取到还没有通过验证的旧Cookie
