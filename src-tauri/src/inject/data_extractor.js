@@ -102,36 +102,84 @@
             room_store: ''
         };
 
-        // 方法1: 从 window 对象中查找
-        if (window.__INITIAL_STATE__ || window.ROOM_DATA || window.__INITIAL_PROPS__) {
-            console.log('📦 从 window 对象提取数据...');
+        // 方法1: 从 window.__STORE__ 对象中查找（抖音实际使用的数据结构）
+        if (window.__STORE__) {
+            console.log('📦 从 window.__STORE__ 提取数据...');
+            console.log('找到 STORE，包含键:', Object.keys(window.__STORE__));
 
-            // 尝试从不同的全局变量中提取
-            const stateData = window.__INITIAL_STATE__ || window.ROOM_DATA || window.__INITIAL_PROPS__;
-            console.log('找到状态数据:', Object.keys(stateData));
+            try {
+                const store = window.__STORE__;
 
-            // 深度搜索数据结构（扩展搜索更多字段名）
-            const searchKeys = [
-                'title', 'nickname', 'room_title', 'roomTitle',  // 标题相关
-                'user_unique_id', 'userId', 'user_id', 'roomId', 'room_id', 'web_rid',  // ID 相关
-                'stream_url', 'pull_url', 'streamUrl', 'flv_pull_url', 'hls_pull_url'  // 推流地址相关
-            ];
-            const searchResult = deepSearch(stateData, searchKeys);
-            console.log('深度搜索结果:', searchResult);
-            console.log('完整数据对象键:', Object.keys(stateData));
+                // 从 roomStore 提取直播间信息
+                if (store.roomStore) {
+                    console.log('✓ 找到 roomStore');
+                    const roomStore = store.roomStore;
 
-            // 提取标题
-            data.title = searchResult.title || searchResult.nickname || searchResult.room_title || searchResult.roomTitle || '';
+                    // 尝试提取标题
+                    data.title = roomStore.roomInfo?.title ||
+                                roomStore.title ||
+                                roomStore.room?.title || '';
 
-            // 提取主播ID
-            data.user_unique_id = searchResult.user_unique_id || searchResult.userId || searchResult.user_id ||
-                                 searchResult.roomId || searchResult.room_id || searchResult.web_rid || '';
+                    // 尝试提取房间ID
+                    const roomId = roomStore.roomInfo?.roomId ||
+                                  roomStore.roomId ||
+                                  roomStore.room?.id_str || '';
 
-            // 提取推流地址
-            data.stream_url = searchResult.stream_url || searchResult.pull_url || searchResult.streamUrl ||
-                             searchResult.flv_pull_url || searchResult.hls_pull_url || '';
+                    console.log('  roomStore 标题:', data.title || '(未找到)');
+                    console.log('  roomStore 房间ID:', roomId || '(未找到)');
+                }
 
-            data.room_store = JSON.stringify(stateData);
+                // 从 userStore 提取用户信息
+                if (store.userStore) {
+                    console.log('✓ 找到 userStore');
+                    const userStore = store.userStore;
+
+                    // 尝试提取用户唯一ID
+                    data.user_unique_id = userStore.userInfo?.uniqueId ||
+                                         userStore.userInfo?.user_unique_id ||
+                                         userStore.uniqueId ||
+                                         userStore.user_unique_id || '';
+
+                    console.log('  userStore 用户ID:', data.user_unique_id || '(未找到)');
+                }
+
+                // 从 streamStore 提取推流信息
+                if (store.streamStore) {
+                    console.log('✓ 找到 streamStore');
+                    const streamStore = store.streamStore;
+
+                    // 尝试提取推流地址
+                    data.stream_url = streamStore.pullUrl ||
+                                     streamStore.stream_url ||
+                                     streamStore.flv_pull_url ||
+                                     streamStore.hls_pull_url || '';
+
+                    console.log('  streamStore 推流地址:', data.stream_url ? '已找到' : '(未找到)');
+                }
+
+                // 将整个 STORE 序列化存储（使用 JSON.stringify 处理 MobX 对象）
+                try {
+                    // MobX 对象需要转换为普通对象
+                    const storeData = {
+                        roomStore: toPlainObject(store.roomStore),
+                        userStore: toPlainObject(store.userStore),
+                        streamStore: toPlainObject(store.streamStore),
+                    };
+                    data.room_store = JSON.stringify(storeData);
+                    console.log('✓ 序列化 store 数据，长度:', data.room_store.length);
+                } catch (e) {
+                    console.warn('⚠️  序列化 store 失败:', e.message);
+                    // 备用方案：只存储基本信息
+                    data.room_store = JSON.stringify({
+                        title: data.title,
+                        user_unique_id: data.user_unique_id,
+                        stream_url: data.stream_url
+                    });
+                }
+
+            } catch (error) {
+                console.error('❌ 从 __STORE__ 提取数据时出错:', error);
+            }
         }
 
         // 方法2: 从页面 HTML 中的 script 标签提取
@@ -206,6 +254,41 @@
         }
 
         return result;
+    }
+
+    // 将 MobX observable 对象转换为普通对象
+    function toPlainObject(obj, maxDepth = 5, currentDepth = 0) {
+        if (currentDepth > maxDepth || obj === null || obj === undefined) {
+            return obj;
+        }
+
+        // 基本类型直接返回
+        if (typeof obj !== 'object') {
+            return obj;
+        }
+
+        // 数组
+        if (Array.isArray(obj)) {
+            return obj.map(item => toPlainObject(item, maxDepth, currentDepth + 1));
+        }
+
+        // 对象
+        const plainObj = {};
+        for (let key in obj) {
+            // 跳过 MobX 内部属性和函数
+            if (key.startsWith('$') || key.startsWith('_') || typeof obj[key] === 'function') {
+                continue;
+            }
+
+            try {
+                const value = obj[key];
+                plainObj[key] = toPlainObject(value, maxDepth, currentDepth + 1);
+            } catch (e) {
+                // 忽略无法访问的属性
+            }
+        }
+
+        return plainObj;
     }
 
     // 发送数据给后端
