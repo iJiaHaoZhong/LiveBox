@@ -14,55 +14,64 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
     println!("🌐 [get_live_html] 使用浏览器窗口提取数据（方案1）");
     println!("💡 [get_live_html] 不使用后端 HTTP 请求，直接在浏览器中提取数据");
 
-    // ========== 步骤1: 先发送 HEAD 请求获取 ttwid Cookie ==========
+    // ========== 步骤1: 先访问主页，再访问直播间获取 ttwid Cookie ==========
     println!("🍪 [get_live_html] 步骤1: 获取 ttwid Cookie...");
     let mut extracted_ttwid = String::new();
 
     match reqwest::Client::builder()
-        .cookie_store(true)
+        .cookie_store(true)  // 启用 Cookie 存储，自动管理 Cookie
         .build()
     {
         Ok(client) => {
+            // 第一步：访问抖音主页获取初始 Cookie
+            println!("  1.1 访问 douyin.com 获取初始 Cookie...");
+            let mut home_headers = reqwest::header::HeaderMap::new();
+            home_headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8".parse().unwrap());
+            home_headers.insert("accept-language", "zh-CN,zh;q=0.9,en;q=0.8".parse().unwrap());
+            home_headers.insert("cache-control", "max-age=0".parse().unwrap());
+            home_headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".parse().unwrap());
+
+            // 访问主页（这会设置初始 Cookie）
+            match client.get("https://www.douyin.com/").headers(home_headers).send().await {
+                Ok(_) => {
+                    println!("  ✓ 主页访问成功");
+                    // 延迟 1 秒，模拟人类行为
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+                Err(e) => {
+                    println!("  ⚠️  主页访问失败: {}", e);
+                }
+            }
+
+            // 第二步：访问直播间页面，获取 ttwid
+            println!("  1.2 访问直播间页面获取 ttwid...");
             let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8".parse().unwrap());
+            headers.insert("accept-language", "zh-CN,zh;q=0.9,en;q=0.8".parse().unwrap());
+            headers.insert("cache-control", "max-age=0".parse().unwrap());
+            headers.insert("referer", "https://www.douyin.com/".parse().unwrap());
             headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".parse().unwrap());
 
-            match client.head(url).headers(headers.clone()).send().await {
+            match client.get(url).headers(headers).send().await {
                 Ok(response) => {
-                    println!("📊 [get_live_html] HEAD 请求响应状态: {}", response.status());
+                    println!("  ✓ 直播间页面访问成功，状态: {}", response.status());
 
                     // 从响应的 Set-Cookie 中提取 ttwid
                     let cookies = response.cookies();
                     for cookie in cookies {
                         if cookie.name() == "ttwid" {
                             extracted_ttwid = cookie.value().to_string();
-                            println!("✅ [get_live_html] 成功提取 ttwid: {}...", &extracted_ttwid[..20.min(extracted_ttwid.len())]);
+                            println!("  ✅ 成功提取 ttwid: {}...", &extracted_ttwid[..20.min(extracted_ttwid.len())]);
                             break;
                         }
                     }
 
                     if extracted_ttwid.is_empty() {
-                        println!("⚠️  [get_live_html] HEAD 请求未返回 ttwid，尝试 GET 请求...");
-
-                        // 如果 HEAD 没有返回 ttwid，尝试 GET
-                        match client.get(url).headers(headers).send().await {
-                            Ok(get_response) => {
-                                let get_cookies = get_response.cookies();
-                                for cookie in get_cookies {
-                                    if cookie.name() == "ttwid" {
-                                        extracted_ttwid = cookie.value().to_string();
-                                        println!("✅ [get_live_html] GET 请求成功提取 ttwid: {}...", &extracted_ttwid[..20.min(extracted_ttwid.len())]);
-                                        break;
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                println!("⚠️  [get_live_html] GET 请求失败: {}", e);
-                            }
-                        }
+                        println!("  ⚠️  响应未返回 ttwid Cookie");
                     }
                 }
                 Err(e) => {
-                    println!("⚠️  [get_live_html] HEAD 请求失败: {}", e);
+                    println!("  ⚠️  直播间页面访问失败: {}", e);
                 }
             }
         }
