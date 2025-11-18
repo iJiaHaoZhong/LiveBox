@@ -43,6 +43,22 @@ fn main() {
                 println!("📱 登录窗口页面已加载: {}", window.label());
             }
         })
+        .setup(|app| {
+            // 创建隐藏的守护窗口，防止应用退出
+            let _daemon = tauri::WindowBuilder::new(
+                app,
+                "daemon",
+                tauri::WindowUrl::App("index.html".into())
+            )
+            .title("LiveBox Daemon")
+            .inner_size(1.0, 1.0)
+            .visible(false)
+            .skip_taskbar(true)
+            .build()?;
+
+            println!("🛡️ 守护窗口已创建，应用不会自动退出");
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
@@ -54,6 +70,11 @@ fn main() {
                         println!("🛑 检测到退出请求，但登录窗口正在运行");
                         println!("💡 阻止应用退出，等待登录完成");
                         api.prevent_exit();
+                    } else {
+                        // 允许正常退出，但先关闭守护窗口
+                        if let Some(daemon) = app_handle.get_window("daemon") {
+                            let _ = daemon.close();
+                        }
                     }
                 }
                 _ => {}
