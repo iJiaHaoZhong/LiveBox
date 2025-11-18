@@ -98,13 +98,15 @@
                     // 提取标题
                     data.title = roomInfo.room?.title || roomInfo.title || '';
 
-                    // 转换 roomInfo 为普通对象并序列化
-                    // 这是关键数据，包含 room.id_str (room_id) 等信息
-                    const plainRoomInfo = toPlainObject(roomInfo, 3);
-                    data.room_store = JSON.stringify(plainRoomInfo);
+                    // ⚠️ 重要：前端期望的是 roomInfo.room 对象，而不是整个 roomInfo
+                    // 原来的 HTTP 方式提取的正则：roomInfo\\":{\\"room\\":(.*?)
+                    // 所以这里只提取 room 子对象
+                    const room = roomInfo.room || roomInfo;
+                    const plainRoom = toPlainObject(room, 3);
+                    data.room_store = JSON.stringify(plainRoom);
 
                     console.log('  标题:', data.title || '(未找到)');
-                    console.log('  room_id:', roomInfo.room?.id_str || roomInfo.roomId || '(未找到)');
+                    console.log('  room_id:', room.id_str || roomInfo.roomId || '(未找到)');
                     console.log('  room_store 长度:', data.room_store.length, '字符');
                 }
 
