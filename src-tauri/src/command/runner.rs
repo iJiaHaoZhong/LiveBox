@@ -32,7 +32,7 @@ impl DouYinReq {
         println!("步骤1: 访问 douyin.com 获取初始 Cookie...");
         let mut home_headers = reqwest::header::HeaderMap::new();
         home_headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7".parse()?);
-        home_headers.insert("accept-encoding", "gzip, deflate, br, zstd".parse()?);
+        // 移除 accept-encoding 以获取未压缩响应（reqwest 需要额外 features 才能自动解压）
         home_headers.insert("accept-language", "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6".parse()?);
         home_headers.insert("cache-control", "max-age=0".parse()?);
         home_headers.insert("dnt", "1".parse()?);
@@ -91,7 +91,7 @@ impl DouYinReq {
         let mut headers = reqwest::header::HeaderMap::new();
         // 严格按照浏览器请求头的顺序和格式
         headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7".parse()?);
-        headers.insert("accept-encoding", "gzip, deflate, br, zstd".parse()?);
+        // 移除 accept-encoding 以获取未压缩响应
         headers.insert("accept-language", "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6".parse()?);
         headers.insert("cache-control", "max-age=0".parse()?);
         headers.insert("dnt", "1".parse()?); // Do Not Track
