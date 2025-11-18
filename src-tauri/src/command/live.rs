@@ -26,7 +26,7 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
             let mut headers = reqwest::header::HeaderMap::new();
             headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".parse().unwrap());
 
-            match client.head(url).headers(headers).send().await {
+            match client.head(url).headers(headers.clone()).send().await {
                 Ok(response) => {
                     println!("📊 [get_live_html] HEAD 请求响应状态: {}", response.status());
 
