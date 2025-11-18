@@ -56,9 +56,17 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                 Ok(response) => {
                     println!("  ✓ 直播间页面访问成功，状态: {}", response.status());
 
-                    // 从响应的 Set-Cookie 中提取 ttwid
+                    // 打印所有收到的 Cookie（调试用）
                     let cookies = response.cookies();
-                    for cookie in cookies {
+                    let cookie_names: Vec<String> = cookies.iter().map(|c| c.name().to_string()).collect();
+                    if cookie_names.is_empty() {
+                        println!("  📋 响应中没有 Set-Cookie 头");
+                    } else {
+                        println!("  📋 收到的 Cookie: {:?}", cookie_names);
+                    }
+
+                    // 尝试从收到的 Cookie 中提取 ttwid
+                    for cookie in response.cookies() {
                         if cookie.name() == "ttwid" {
                             extracted_ttwid = cookie.value().to_string();
                             println!("  ✅ 成功提取 ttwid: {}...", &extracted_ttwid[..20.min(extracted_ttwid.len())]);
@@ -67,7 +75,8 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                     }
 
                     if extracted_ttwid.is_empty() {
-                        println!("  ⚠️  响应未返回 ttwid Cookie");
+                        println!("  ⚠️  响应中没有 ttwid Cookie");
+                        println!("  💡 ttwid 可能需要通过其他方式获取");
                     }
                 }
                 Err(e) => {
