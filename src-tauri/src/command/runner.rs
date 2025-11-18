@@ -53,22 +53,29 @@ impl DouYinReq {
 
         // 尝试加载用户保存的 Cookie
         let saved_cookies = if let Ok(cookie_path) = CookieStore::get_default_path() {
+            println!("📁 Cookie 文件路径: {:?}", cookie_path);
+            println!("📁 文件是否存在: {}", cookie_path.exists());
+
             if cookie_path.exists() {
                 match CookieStore::load_from_file(&cookie_path) {
                     Ok(store) => {
-                        println!("✓ 成功加载 {} 个已保存的用户 Cookie", store.cookies.len());
-                        Some(store.to_cookie_string())
+                        println!("✅ 成功加载 {} 个已保存的用户 Cookie", store.cookies.len());
+                        let cookie_str = store.to_cookie_string();
+                        println!("🍪 Cookie 内容预览: {}...", &cookie_str.chars().take(100).collect::<String>());
+                        Some(cookie_str)
                     }
                     Err(e) => {
-                        println!("⚠ 加载保存的 Cookie 失败: {}", e);
+                        println!("⚠️ 加载保存的 Cookie 失败: {}", e);
                         None
                     }
                 }
             } else {
-                println!("ℹ 未找到保存的 Cookie 文件，使用默认请求");
+                println!("ℹ️ 未找到保存的 Cookie 文件: {:?}", cookie_path);
+                println!("💡 如果您已登录过，请检查文件是否被删除");
                 None
             }
         } else {
+            println!("❌ 无法获取 Cookie 文件路径");
             None
         };
 
