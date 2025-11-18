@@ -96,34 +96,99 @@ impl DouYinReq {
         headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
 
         // 如果有保存的 Cookie，添加到请求头
-        if let Some(cookie_str) = saved_cookies {
+        let using_saved_cookies = saved_cookies.is_some();
+        if let Some(ref cookie_str) = saved_cookies {
             headers.insert("cookie", cookie_str.parse()?);
             println!("✓ 已将保存的 Cookie 添加到请求头");
+            println!("📋 Cookie 详情（前200字符）: {}...", &cookie_str.chars().take(200).collect::<String>());
+        } else {
+            println!("ℹ️  未使用保存的 Cookie，仅使用从主页获取的临时 Cookie");
         }
 
+        println!("🌐 开始发送请求到直播间页面...");
         let request = self.request.get(self.room_url.clone()).headers(headers);
         let response = request.send().await?;
+
+        // 记录响应状态
+        let status = response.status();
+        println!("📊 响应状态码: {}", status);
+
         // 先使用cookie，再使用text
         let cookies = response.cookies();
         let mut ttwid = String::new();
+        println!("🍪 从响应中获取的 Cookie:");
         for c in cookies {
-            println!("cookies: {:?} value:{:?}", c.name(), c.value());
+            println!("   - {}: {} (domain: {:?}, path: {:?})",
+                c.name(),
+                if c.value().len() > 50 { format!("{}...", &c.value()[..50]) } else { c.value().to_string() },
+                c.domain(),
+                c.path()
+            );
             if c.name() == "ttwid" {
                 ttwid = c.value().to_string();
             }
         }
+
         // 获取cookie里面的ttwid
+        println!("📄 开始读取响应内容...");
         let body = response.text().await?;
+        println!("📏 响应内容长度: {} 字符", body.len());
+
+        // 显示响应内容的开头和结尾（用于调试）
+        if body.len() > 0 {
+            let preview_start = body.chars().take(500).collect::<String>();
+            let preview_end = if body.len() > 500 {
+                body.chars().skip(body.len().saturating_sub(300)).collect::<String>()
+            } else {
+                String::new()
+            };
+            println!("📄 响应内容预览（前500字符）:");
+            println!("{}", preview_start);
+            if !preview_end.is_empty() {
+                println!("📄 响应内容预览（最后300字符）:");
+                println!("{}", preview_end);
+            }
+        }
 
         // 检测是否需要登录（Access Denied、验证码页面等）
-        if body.contains("Access Denied")
-            || body.contains("X-TT-System-Error")
-            || body.contains("验证码中间页")
-            || body.contains("captcha")
-            || body.contains("middle_page_loading") {
+        let mut deny_reason = None;
+        if body.contains("Access Denied") {
+            deny_reason = Some("包含 'Access Denied' 文字");
+        } else if body.contains("X-TT-System-Error") {
+            deny_reason = Some("包含 'X-TT-System-Error' 系统错误标识");
+        } else if body.contains("验证码中间页") {
+            deny_reason = Some("包含 '验证码中间页' 文字");
+        } else if body.contains("captcha") {
+            deny_reason = Some("包含 'captcha' 验证码标识");
+        } else if body.contains("middle_page_loading") {
+            deny_reason = Some("包含 'middle_page_loading' 中间页标识");
+        }
 
-            println!("❌ 检测到需要登录（Access Denied 或验证码页面）");
-            println!("💡 提示: 后端将自动打开登录窗口");
+        if let Some(reason) = deny_reason {
+            println!("\n❌ ========== 访问被拒绝 ==========");
+            println!("❌ 检测到需要登录或验证");
+            println!("📍 拒绝原因: {}", reason);
+            println!("🍪 是否使用了保存的 Cookie: {}", if using_saved_cookies { "是" } else { "否" });
+            if using_saved_cookies {
+                if let Some(ref cookie_str) = saved_cookies {
+                    println!("📋 使用的 Cookie 数量: {} 个", cookie_str.split(';').count());
+                    println!("📋 Cookie 示例:");
+                    for (i, cookie) in cookie_str.split(';').take(5).enumerate() {
+                        let parts: Vec<&str> = cookie.trim().splitn(2, '=').collect();
+                        if parts.len() == 2 {
+                            let value_preview = if parts[1].len() > 30 {
+                                format!("{}...", &parts[1][..30])
+                            } else {
+                                parts[1].to_string()
+                            };
+                            println!("   {}. {} = {}", i + 1, parts[0], value_preview);
+                        }
+                    }
+                }
+            }
+            println!("🌐 请求的 URL: {}", self.room_url);
+            println!("💡 提示: 后端将根据 Cookie 文件是否存在决定是否打开登录窗口");
+            println!("======================================\n");
             return Err(crate::command::model::ERROR_ACCESS_DENIED.into());
         }
 
