@@ -47,14 +47,15 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                 .initialization_script(include_str!("../inject/cookie_extractor.js"))
                 .build()
                 {
-                    Ok(_) => {
+                    Ok(window) => {
                         println!("✅ 登录窗口已打开");
                         println!("⏳ 等待用户登录...");
                         println!("💡 提示: 请在打开的窗口中登录，登录成功后窗口会自动关闭");
 
-                        // 等待窗口关闭（最多等待 60 秒）
+                        // 定期检查窗口标题以获取 Cookie（最多等待 120 秒）
                         let mut attempts = 0;
-                        let max_attempts = 120; // 60秒 (每次检查间隔 500ms)
+                        let max_attempts = 240; // 120秒 (每次检查间隔 500ms)
+                        let mut cookie_string: Option<String> = None;
 
                         loop {
                             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -65,9 +66,39 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                 break;
                             }
 
+                            // 尝试从窗口标题读取 Cookie
+                            if cookie_string.is_none() {
+                                if let Ok(title) = window.title() {
+                                    if title.starts_with("__COOKIES_READY__|") {
+                                        // 提取 Cookie 字符串
+                                        let cookies = title.trim_start_matches("__COOKIES_READY__|");
+                                        cookie_string = Some(cookies.to_string());
+
+                                        println!("🍪 检测到 Cookie！");
+                                        println!("📝 Cookie 长度: {} 字符", cookies.len());
+
+                                        // 保存 Cookie
+                                        match crate::command::cookie::save_cookies(cookies.to_string()).await {
+                                            Ok(msg) => {
+                                                println!("✅ {}", msg);
+                                            }
+                                            Err(err) => {
+                                                eprintln!("❌ Cookie 保存失败: {}", err);
+                                            }
+                                        }
+
+                                        // 关闭窗口
+                                        let _ = window.close();
+                                        println!("🔒 登录窗口已关闭");
+                                        break;
+                                    }
+                                }
+                            }
+
                             attempts += 1;
                             if attempts >= max_attempts {
-                                println!("⏱ 等待超时（60秒），窗口仍未关闭");
+                                println!("⏱ 等待超时（120秒），未检测到登录");
+                                let _ = window.close();
                                 return Err("等待登录超时，请重试".into());
                             }
 
@@ -76,6 +107,12 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                 let seconds = attempts / 2;
                                 println!("⏳ 已等待 {} 秒，请尽快完成登录...", seconds);
                             }
+                        }
+
+                        // 检查是否成功获取到 Cookie
+                        if cookie_string.is_none() {
+                            println!("⚠️  窗口已关闭，但未检测到 Cookie");
+                            return Err("未检测到登录 Cookie，请重试".into());
                         }
 
                         // 等待额外 1 秒确保 Cookie 已保存到文件

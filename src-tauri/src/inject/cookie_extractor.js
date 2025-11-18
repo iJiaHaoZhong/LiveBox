@@ -46,17 +46,10 @@
         }
     }
 
-    // 保存 Cookie 到后端
+    // 保存 Cookie 到全局变量供 Rust 端读取
     async function saveCookies(cookieString) {
         try {
             console.log('💾 正在保存 Cookie...');
-
-            // 详细的调试信息
-            console.log('🔍 调试信息:');
-            console.log('  - window.__TAURI__ 存在?', typeof window.__TAURI__ !== 'undefined');
-            console.log('  - window.__TAURI__.invoke 存在?', typeof window.__TAURI__?.invoke !== 'undefined');
-            console.log('  - 当前 URL:', window.location.href);
-            console.log('  - 窗口名称:', window.name);
 
             // 检查当前 URL 是否为有效的抖音域名
             const currentUrl = window.location.href;
@@ -66,39 +59,33 @@
 
             if (!isValidDomain) {
                 console.log('⏳ 当前页面不是抖音域名 (about:blank 或其他)，等待导航到正确页面...');
-                // 不显示错误，只是静默等待
                 return;
             }
 
-            // 检查 Tauri API 是否可用
-            if (typeof window.__TAURI__ === 'undefined' || typeof window.__TAURI__.invoke === 'undefined') {
-                console.error('❌ Tauri API 不可用！');
-                console.error('请确保：');
-                console.error('1. 应用已重新编译（npm run tauri dev 或 npm run tauri build）');
-                console.error('2. tauri.conf.json 中已配置 dangerousRemoteDomainIpcAccess');
-                console.error('3. 域名和窗口标签匹配正确');
-                showErrorMessage('Tauri API 不可用，请重新编译应用后再试');
-                return;
-            }
+            // 将 Cookie 通过多种方式传递给 Rust 端
+            // 方法1: 存储到全局变量
+            window.__DOUYIN_COOKIES__ = cookieString;
+            window.__DOUYIN_COOKIES_READY__ = true;
 
-            // 调用 Tauri 命令保存 Cookie
-            const result = await window.__TAURI__.invoke('save_cookies', {
-                cookieString: cookieString
-            });
+            // 方法2: 通过窗口标题传递（使用特殊前缀）
+            const originalTitle = document.title;
+            document.title = '__COOKIES_READY__|' + cookieString;
 
-            console.log('✅ Cookie 保存成功:', result);
+            console.log('✅ Cookie 已准备好，正在传递给后端...');
+            console.log('🔍 Cookie 数量:', cookieString.split(';').length);
+
+            // 2秒后恢复标题
+            setTimeout(() => {
+                if (document.title.startsWith('__COOKIES_READY__|')) {
+                    document.title = originalTitle;
+                }
+            }, 2000);
 
             // 显示成功提示
             showSuccessMessage();
 
-            // 3 秒后自动关闭窗口
-            setTimeout(() => {
-                console.log('🔒 即将关闭窗口...');
-                window.close();
-            }, 3000);
-
         } catch (error) {
-            console.error('❌ Cookie 保存失败:', error);
+            console.error('❌ Cookie 处理失败:', error);
             showErrorMessage(error.toString());
         }
     }
