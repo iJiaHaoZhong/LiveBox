@@ -57,6 +57,25 @@ fn main() {
             .build()?;
 
             println!("🛡️ 守护窗口已创建，应用不会自动退出");
+
+            // 启动时检查 Cookie 文件状态
+            use utils::cookie_store::CookieStore;
+            if let Ok(cookie_path) = CookieStore::get_default_path() {
+                println!("📁 Cookie 文件位置: {:?}", cookie_path);
+                if cookie_path.exists() {
+                    match CookieStore::load_from_file(&cookie_path) {
+                        Ok(store) => {
+                            println!("✅ 发现已保存的 Cookie 文件，包含 {} 个 Cookie", store.cookies.len());
+                        }
+                        Err(e) => {
+                            println!("⚠️  Cookie 文件存在但读取失败: {}", e);
+                        }
+                    }
+                } else {
+                    println!("ℹ️  Cookie 文件尚未创建，首次登录后将自动保存");
+                }
+            }
+
             Ok(())
         })
         .build(tauri::generate_context!())
