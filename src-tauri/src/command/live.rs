@@ -1,5 +1,4 @@
-use crate::command::model::{LiveInfo, ERROR_ACCESS_DENIED, ERROR_CAPTCHA_REQUIRED};
-use crate::command::runner::DouYinReq;
+use crate::command::model::LiveInfo;
 use tauri::{AppHandle, Manager};
 
 // 自定义函数
@@ -12,389 +11,156 @@ pub async fn greet_you(name: &str) -> Result<String, String> {
 #[tauri::command]
 pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, String> {
     println!("🎯 [get_live_html] 开始执行，URL: {}", url);
-    println!("🔍 [get_live_html] 当前窗口列表:");
-    for (label, _) in handle.windows() {
-        println!("   - 窗口: {}", label);
+    println!("🌐 [get_live_html] 使用浏览器窗口提取数据（方案1）");
+    println!("💡 [get_live_html] 不使用后端 HTTP 请求，直接在浏览器中提取数据");
+
+    let window_label = "douyinData";
+
+    // 如果窗口已存在，先关闭
+    if let Some(existing_window) = handle.get_window(window_label) {
+        let _ = existing_window.close();
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
 
-    let mut live_req = DouYinReq::new(url);
+    // 创建窗口，注入数据提取脚本
+    println!("🪟 [get_live_html] 打开浏览器窗口...");
+    match tauri::WindowBuilder::new(
+        &handle,
+        window_label,
+        tauri::WindowUrl::External(url.parse().unwrap()),
+    )
+    .title("正在获取直播间数据...")
+    .inner_size(1200.0, 800.0)
+    .center()
+    .initialization_script(include_str!("../inject/data_extractor.js"))
+    .build()
+    {
+        Ok(window) => {
+            println!("✅ [get_live_html] 窗口已打开");
+            println!("⏳ [get_live_html] 等待数据提取...");
 
-    // 第一次尝试获取直播间信息
-    println!("📡 [get_live_html] 发起第一次请求...");
-    let result = live_req.get_room_info().await;
-    println!("📥 [get_live_html] 第一次请求完成");
+            let mut attempts = 0;
+            let max_attempts = 120; // 60 秒（每次检查间隔 500ms）
 
-    // 立即将 Result 转换为 Result<LiveInfo, String>，避免 Send 问题
-    let result_string: Result<LiveInfo, String> = result.map_err(|e| e.to_string());
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-    match result_string {
-        Ok(info) => Ok(info),
-        Err(error_msg) => {
-            // 检查是否需要验证码
-            if error_msg == ERROR_CAPTCHA_REQUIRED {
-                println!("🔐 [get_live_html] 检测到需要验证码，打开浏览器窗口让用户完成验证...");
-
-                let window_label = "douyinCaptcha";
-
-                // 如果窗口已存在，先关闭
-                if let Some(existing_window) = handle.get_window(window_label) {
-                    let _ = existing_window.close();
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                // 检查窗口是否还存在
+                if handle.get_window(window_label).is_none() {
+                    println!("⚠️  [get_live_html] 窗口已关闭");
+                    return Err("窗口被用户关闭".into());
                 }
 
-                // 创建新窗口，直接加载直播间 URL（会显示验证码页面）
-                match tauri::WindowBuilder::new(
-                    &handle,
-                    window_label,
-                    tauri::WindowUrl::External(url.parse().unwrap()),
-                )
-                .title("验证码验证 - 完成后会自动保存 Cookie")
-                .inner_size(1200.0, 800.0)
-                .center()
-                .initialization_script(include_str!("../inject/cookie_extractor.js"))
-                .build()
-                {
-                    Ok(window) => {
-                        println!("✅ [get_live_html] 验证码窗口已打开");
-                        println!("⏳ [get_live_html] 等待用户完成验证码...");
+                let current_url = window.url();
+                let url_str = current_url.to_string();
 
-                        // 等待用户完成验证码并提取新 Cookie
-                        let mut attempts = 0;
-                        let max_attempts = 600; // 5分钟 (每次检查间隔 500ms)
-                        let mut cookie_string: Option<String> = None;
+                // 检查是否有数据返回
+                if url_str.contains("#__LIVE_DATA__=") {
+                    if let Some(hash_start) = url_str.find("#__LIVE_DATA__=") {
+                        let data_str = &url_str[hash_start + 15..];
 
-                        loop {
-                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        match urlencoding::decode(data_str) {
+                            Ok(decoded_data) => {
+                                println!("📦 [get_live_html] 接收到数据！");
 
-                            // 检查窗口是否还存在
-                            match handle.get_window(window_label) {
-                                None => {
-                                    println!("✅ [get_live_html] 验证码窗口已关闭");
-                                    break;
-                                }
-                                Some(_) => {}
-                            }
+                                // 解析 JSON 数据
+                                match serde_json::from_str::<serde_json::Value>(&decoded_data) {
+                                    Ok(data) => {
+                                        println!("✅ [get_live_html] 数据解析成功！");
 
-                            // 读取 URL hash 中的 Cookie
-                            if cookie_string.is_none() {
-                                if attempts % 10 == 0 && attempts > 0 {
-                                    println!("🔍 等待验证码完成... (第 {} 次检查)", attempts);
-                                }
+                                        // 提取字段
+                                        let title = data.get("title")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
 
-                                let current_url = window.url();
-                                let url_str = current_url.to_string();
+                                        let user_unique_id = data.get("user_unique_id")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
 
-                                if url_str.contains("#__COOKIES__=") {
-                                    if let Some(hash_start) = url_str.find("#__COOKIES__=") {
-                                        let cookie_data = &url_str[hash_start + 13..];
+                                        let stream_url = data.get("stream_url")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
 
-                                        match urlencoding::decode(cookie_data) {
-                                            Ok(decoded_cookies) => {
-                                                let cookies = decoded_cookies.to_string();
-                                                cookie_string = Some(cookies.clone());
+                                        let room_store = data.get("room_store")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
 
-                                                println!("🍪 检测到验证后的 Cookie！");
-                                                println!("📝 Cookie 长度: {} 字符", cookies.len());
+                                        println!("📝 标题: {}", title);
+                                        println!("👤 主播ID: {}", user_unique_id);
 
-                                                // 保存新的 Cookie
-                                                match crate::command::cookie::save_cookies(cookies).await {
-                                                    Ok(msg) => println!("✅ {}", msg),
-                                                    Err(err) => eprintln!("❌ Cookie 保存失败: {}", err),
-                                                }
+                                        // 关闭窗口
+                                        let _ = window.close();
 
-                                                println!("🔒 关闭验证码窗口...");
-                                                let _ = window.close();
-                                                break;
-                                            }
-                                            Err(e) => {
-                                                eprintln!("❌ URL 解码失败: {}", e);
-                                            }
-                                        }
+                                        // 返回数据
+                                        return Ok(LiveInfo {
+                                            stream_url,
+                                            title,
+                                            user_unique_id,
+                                            room_store,
+                                        });
+                                    }
+                                    Err(e) => {
+                                        println!("❌ [get_live_html] JSON 解析失败: {}", e);
+                                        let _ = window.close();
+                                        return Err(format!("数据解析失败: {}", e));
                                     }
                                 }
                             }
-
-                            attempts += 1;
-                            if attempts >= max_attempts {
-                                println!("⏱ 等待超时（5分钟），验证码未完成");
-                                let _ = window.close();
-                                break;
+                            Err(e) => {
+                                println!("❌ [get_live_html] URL 解码失败: {}", e);
                             }
-
-                            if attempts % 60 == 0 {
-                                println!("⏳ 已等待 {} 秒，请尽快完成验证码...", attempts / 2);
-                            }
-                        }
-
-                        // 恢复主窗口
-                        for (label, win) in handle.windows() {
-                            if label != window_label && label != "daemon" {
-                                let _ = win.show();
-                                let _ = win.set_focus();
-                            }
-                        }
-
-                        // 如果获取到了新的 Cookie，重试请求
-                        if cookie_string.is_some() {
-                            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                            println!("🔄 使用新 Cookie 重试获取直播间信息...");
-
-                            let mut retry_req = DouYinReq::new(url);
-                            let retry_result = retry_req.get_room_info().await;
-
-                            match retry_result {
-                                Ok(info) => {
-                                    println!("✅ 验证码验证成功，成功获取直播间信息！");
-                                    return Ok(info);
-                                }
-                                Err(retry_error) => {
-                                    return Err(format!("验证码验证后仍然失败: {}", retry_error));
-                                }
-                            }
-                        } else {
-                            return Err("验证码验证超时或被取消".into());
                         }
                     }
-                    Err(e) => {
-                        return Err(format!("无法打开验证码窗口: {}", e));
+                }
+
+                // 检查是否有错误返回
+                if url_str.contains("#__LIVE_ERROR__=") {
+                    if let Some(hash_start) = url_str.find("#__LIVE_ERROR__=") {
+                        let error_str = &url_str[hash_start + 16..];
+
+                        match urlencoding::decode(error_str) {
+                            Ok(decoded_error) => {
+                                match serde_json::from_str::<serde_json::Value>(&decoded_error) {
+                                    Ok(error_data) => {
+                                        let error_type = error_data.get("error")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("unknown");
+
+                                        let error_message = error_data.get("message")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("未知错误");
+
+                                        println!("❌ [get_live_html] 提取失败: {} - {}", error_type, error_message);
+                                        let _ = window.close();
+                                        return Err(format!("数据提取失败: {}", error_message));
+                                    }
+                                    Err(_) => {}
+                                }
+                            }
+                            Err(_) => {}
+                        }
                     }
+                }
+
+                attempts += 1;
+                if attempts >= max_attempts {
+                    println!("⏱ [get_live_html] 等待超时（60秒）");
+                    let _ = window.close();
+                    return Err("数据提取超时".into());
+                }
+
+                if attempts % 10 == 0 {
+                    println!("⏳ [get_live_html] 等待中... ({} 秒)", attempts / 2);
                 }
             }
-            // 检查是否为 Access Denied 错误
-            else if error_msg == ERROR_ACCESS_DENIED {
-                // 在打开登录窗口之前，先检查是否已有 Cookie 文件
-                let has_cookie_file = if let Ok(cookie_path) = crate::utils::cookie_store::CookieStore::get_default_path() {
-                    let exists = cookie_path.exists();
-                    if exists {
-                        println!("ℹ️  [get_live_html] 检测到已保存的 Cookie 文件，但访问仍然被拒绝");
-                        println!("💡 [get_live_html] 可能的原因：");
-                        println!("   1. Cookie 已过期，需要重新登录");
-                        println!("   2. 此直播间需要特殊权限");
-                        println!("   3. IP 被限制或需要验证码");
-                        println!("📝 [get_live_html] 建议：请删除 Cookie 文件后重新登录");
-                        println!("   Cookie 文件位置: {:?}", cookie_path);
-                    }
-                    exists
-                } else {
-                    false
-                };
-
-                // 如果已有 Cookie 文件，不再打开登录窗口，直接返回错误
-                if has_cookie_file {
-                    return Err("访问被拒绝：已使用保存的 Cookie 但仍无法访问。Cookie 可能已过期，请删除 Cookie 文件后重试。".into());
-                }
-
-                println!("🔐 [get_live_html] 检测到需要登录，自动打开登录窗口...");
-                println!("🔍 [get_live_html] 准备创建登录窗口");
-
-                // 自动打开登录窗口
-                let window_label = "douyinLogin";
-
-                // 如果窗口已存在，先关闭
-                if let Some(existing_window) = handle.get_window(window_label) {
-                    let _ = existing_window.close();
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                }
-
-                // 创建新窗口
-                match tauri::WindowBuilder::new(
-                    &handle,
-                    window_label,
-                    tauri::WindowUrl::External("https://www.douyin.com/".parse().unwrap()),
-                )
-                .title("抖音登录 - 登录后 Cookie 会自动保存")
-                .inner_size(1200.0, 800.0)
-                .center()
-                .initialization_script(include_str!("../inject/cookie_extractor.js"))
-                .build()
-                {
-                    Ok(window) => {
-                        println!("✅ [get_live_html] 登录窗口已打开");
-                        println!("⏳ [get_live_html] 等待用户登录...");
-                        println!("💡 [get_live_html] 提示: 请在打开的窗口中登录，登录成功后窗口会自动关闭");
-                        println!("🔧 [get_live_html] 进入等待循环...");
-
-                        // 定期检查窗口标题以获取 Cookie（最多等待 120 秒）
-                        let mut attempts = 0;
-                        let max_attempts = 240; // 120秒 (每次检查间隔 500ms)
-                        let mut cookie_string: Option<String> = None;
-
-                        println!("🔄 [get_live_html] 开始轮询检查（每500ms一次）");
-                        loop {
-                            // 每次循环开始时打印心跳（仅在调试时）
-                            if attempts % 20 == 0 && attempts > 0 {
-                                println!("💓 心跳检测: 循环运行中 (第 {} 次检查)", attempts);
-                            }
-
-                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-                            // 检查窗口是否还存在
-                            match handle.get_window(window_label) {
-                                None => {
-                                    println!("✅ [get_live_html] 登录窗口已关闭，退出循环");
-
-                                    // 恢复主窗口
-                                    println!("🔄 [get_live_html] 开始恢复主窗口...");
-                                    for (label, win) in handle.windows() {
-                                        if label != "douyinLogin" && label != "daemon" {
-                                            println!("   - 恢复窗口: {}", label);
-                                            let _ = win.show();
-                                            let _ = win.set_focus();
-                                        }
-                                    }
-
-                                    break;
-                                }
-                                Some(_) => {
-                                    // 窗口仍在，继续检查
-                                }
-                            }
-
-                            // 读取 URL hash 中的 Cookie（JavaScript 会将 Cookie 写入 hash）
-                            if cookie_string.is_none() {
-                                // 每 5 秒打印一次检查状态（用于调试）
-                                if attempts % 10 == 0 && attempts > 0 {
-                                    println!("🔍 检查 Cookie 状态 (第 {} 次)", attempts);
-                                }
-
-                                // 读取窗口 URL（window.url() 直接返回 Url，不是 Result）
-                                let current_url = window.url();
-                                let url_str = current_url.to_string();
-
-                                // 检查 URL hash 是否包含 Cookie 数据
-                                if url_str.contains("#__COOKIES__=") {
-                                    // 提取 hash 中的 Cookie 数据
-                                    if let Some(hash_start) = url_str.find("#__COOKIES__=") {
-                                        let cookie_data = &url_str[hash_start + 13..]; // 跳过 "#__COOKIES__="
-
-                                        // URL 解码
-                                        match urlencoding::decode(cookie_data) {
-                                            Ok(decoded_cookies) => {
-                                                let cookies = decoded_cookies.to_string();
-                                                cookie_string = Some(cookies.clone());
-
-                                                println!("🍪 检测到 Cookie（从 URL hash）！");
-                                                println!("📝 Cookie 长度: {} 字符", cookies.len());
-
-                                                // 保存 Cookie
-                                                match crate::command::cookie::save_cookies(cookies).await {
-                                                    Ok(msg) => {
-                                                        println!("✅ {}", msg);
-                                                    }
-                                                    Err(err) => {
-                                                        eprintln!("❌ Cookie 保存失败: {}", err);
-                                                    }
-                                                }
-
-                                                // 关闭窗口
-                                                println!("🔒 尝试关闭登录窗口...");
-                                                match window.close() {
-                                                    Ok(_) => println!("✅ 窗口关闭成功"),
-                                                    Err(e) => eprintln!("❌ 窗口关闭失败: {}", e),
-                                                }
-                                                break;
-                                            }
-                                            Err(e) => {
-                                                eprintln!("❌ URL 解码失败: {}", e);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            attempts += 1;
-                            if attempts >= max_attempts {
-                                println!("⏱ 等待超时（120秒），未检测到登录");
-                                let _ = window.close();
-
-                                // 恢复主窗口
-                                for (label, win) in handle.windows() {
-                                    if label != "douyinLogin" {
-                                        println!("🔄 恢复主窗口: {}", label);
-                                        let _ = win.show();
-                                        let _ = win.set_focus();
-                                    }
-                                }
-
-                                return Err("等待登录超时，请重试".into());
-                            }
-
-                            // 每 10 秒提示一次
-                            if attempts % 20 == 0 {
-                                let seconds = attempts / 2;
-                                println!("⏳ 已等待 {} 秒，请尽快完成登录...", seconds);
-                            }
-                        }
-
-                        // 恢复主窗口（如果被隐藏了）
-                        // 遍历所有窗口，找到非登录窗口并显示
-                        for (label, win) in handle.windows() {
-                            if label != "douyinLogin" {
-                                println!("🔄 恢复主窗口: {}", label);
-                                let _ = win.show();
-                                let _ = win.set_focus();
-                            }
-                        }
-
-                        // 检查是否成功获取到 Cookie
-                        if cookie_string.is_none() {
-                            println!("⚠️  窗口已关闭，但未检测到 Cookie");
-
-                            // 恢复主窗口
-                            for (label, win) in handle.windows() {
-                                if label != "douyinLogin" {
-                                    println!("🔄 恢复主窗口: {}", label);
-                                    let _ = win.show();
-                                    let _ = win.set_focus();
-                                }
-                            }
-
-                            return Err("未检测到登录 Cookie，请重试".into());
-                        }
-
-                        // 等待额外 1 秒确保 Cookie 已保存到文件
-                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-
-                        println!("🔄 重试获取直播间信息...");
-
-                        // 重新创建请求（使用新的 Cookie）
-                        let mut retry_req = DouYinReq::new(url);
-                        let retry_result = retry_req.get_room_info().await;
-
-                        match retry_result {
-                            Ok(info) => {
-                                println!("✅ 登录成功，成功获取直播间信息！");
-                                Ok(info)
-                            }
-                            Err(retry_error) => {
-                                let retry_msg = retry_error.to_string();
-                                if retry_msg == ERROR_ACCESS_DENIED {
-                                    Err("登录可能未完成或失败，请重试".into())
-                                } else {
-                                    Err(format!("重试失败: {}", retry_msg))
-                                }
-                            }
-                        }
-                    }
-                    Err(window_err) => {
-                        eprintln!("❌ 打开登录窗口失败: {}", window_err);
-
-                        // 恢复主窗口
-                        for (label, win) in handle.windows() {
-                            if label != "douyinLogin" {
-                                println!("🔄 恢复主窗口: {}", label);
-                                let _ = win.show();
-                                let _ = win.set_focus();
-                            }
-                        }
-
-                        Err(format!("无法打开登录窗口: {}", window_err))
-                    }
-                }
-            } else {
-                // 其他错误直接返回
-                Err(error_msg)
-            }
+        }
+        Err(e) => {
+            println!("❌ [get_live_html] 无法打开窗口: {}", e);
+            Err(format!("无法打开窗口: {}", e))
         }
     }
 }
@@ -412,41 +178,12 @@ pub async fn open_window(
     _js_content: String,
 ) {
     let window_label = "previewWeb";
-    // if let Some(existing_window) = handle.get_window(window_label) {
-    //     if resize {
-    //         let new_size = LogicalSize::new(width, height);
-    //         match existing_window.set_size(new_size) {
-    //             Ok(_) => println!("Window resized to {}x{}", width, height),
-    //             Err(e) => eprintln!("Failed to resize window: {}", e),
-    //         }
-    //     } else {
-    //         existing_window.close().unwrap();
-    //         println!("Existing window closed.");
-    //         let start = Instant::now();
-    //         while handle.get_window(window_label).is_some() {
-    //             if start.elapsed().as_secs() > 2 {
-    //                 println!("Window close took too long. Aborting.");
-    //                 return;
-    //             }
-    //             std::thread::yield_now();
-    //         }
-    //     }
-    // }
     println!("Opening docs in external window: {}, {}", app_url, platform);
-    // println!("js_content: {}", js_content);
-    // let resource_path = handle
-    //     .path_resolver()
-    //     .resolve_resource("data/custom.js")
-    //     .expect("failed to resolve resource");
-    // let mut custom_js = std::fs::File::open(&resource_path).unwrap();
-    // let mut contents = String::new();
-    // custom_js.read_to_string(&mut contents).unwrap();
-    // contents += js_content.as_str();
-    // println!("js file contents: {}", contents);
+
     if !resize {
         let _window = tauri::WindowBuilder::new(
             &handle,
-            window_label, /* the unique window label */
+            window_label,
             tauri::WindowUrl::External(app_url.parse().unwrap()),
         )
         .title(app_name.clone())
