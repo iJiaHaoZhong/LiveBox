@@ -105,55 +105,46 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                     println!("🔍 检查 Cookie 状态 (第 {} 次)", attempts);
                                 }
 
-                                // 读取窗口 URL
-                                match window.url() {
-                                    Ok(current_url) => {
-                                        let url_str = current_url.to_string();
+                                // 读取窗口 URL（window.url() 直接返回 Url，不是 Result）
+                                let current_url = window.url();
+                                let url_str = current_url.to_string();
 
-                                        // 检查 URL hash 是否包含 Cookie 数据
-                                        if url_str.contains("#__COOKIES__=") {
-                                            // 提取 hash 中的 Cookie 数据
-                                            if let Some(hash_start) = url_str.find("#__COOKIES__=") {
-                                                let cookie_data = &url_str[hash_start + 13..]; // 跳过 "#__COOKIES__="
+                                // 检查 URL hash 是否包含 Cookie 数据
+                                if url_str.contains("#__COOKIES__=") {
+                                    // 提取 hash 中的 Cookie 数据
+                                    if let Some(hash_start) = url_str.find("#__COOKIES__=") {
+                                        let cookie_data = &url_str[hash_start + 13..]; // 跳过 "#__COOKIES__="
 
-                                                // URL 解码
-                                                match urlencoding::decode(cookie_data) {
-                                                    Ok(decoded_cookies) => {
-                                                        let cookies = decoded_cookies.to_string();
-                                                        cookie_string = Some(cookies.clone());
+                                        // URL 解码
+                                        match urlencoding::decode(cookie_data) {
+                                            Ok(decoded_cookies) => {
+                                                let cookies = decoded_cookies.to_string();
+                                                cookie_string = Some(cookies.clone());
 
-                                                        println!("🍪 检测到 Cookie（从 URL hash）！");
-                                                        println!("📝 Cookie 长度: {} 字符", cookies.len());
+                                                println!("🍪 检测到 Cookie（从 URL hash）！");
+                                                println!("📝 Cookie 长度: {} 字符", cookies.len());
 
-                                                        // 保存 Cookie
-                                                        match crate::command::cookie::save_cookies(cookies).await {
-                                                            Ok(msg) => {
-                                                                println!("✅ {}", msg);
-                                                            }
-                                                            Err(err) => {
-                                                                eprintln!("❌ Cookie 保存失败: {}", err);
-                                                            }
-                                                        }
-
-                                                        // 关闭窗口
-                                                        println!("🔒 尝试关闭登录窗口...");
-                                                        match window.close() {
-                                                            Ok(_) => println!("✅ 窗口关闭成功"),
-                                                            Err(e) => eprintln!("❌ 窗口关闭失败: {}", e),
-                                                        }
-                                                        break;
+                                                // 保存 Cookie
+                                                match crate::command::cookie::save_cookies(cookies).await {
+                                                    Ok(msg) => {
+                                                        println!("✅ {}", msg);
                                                     }
-                                                    Err(e) => {
-                                                        eprintln!("❌ URL 解码失败: {}", e);
+                                                    Err(err) => {
+                                                        eprintln!("❌ Cookie 保存失败: {}", err);
                                                     }
                                                 }
+
+                                                // 关闭窗口
+                                                println!("🔒 尝试关闭登录窗口...");
+                                                match window.close() {
+                                                    Ok(_) => println!("✅ 窗口关闭成功"),
+                                                    Err(e) => eprintln!("❌ 窗口关闭失败: {}", e),
+                                                }
+                                                break;
                                             }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        // 每 10 秒打印一次错误（用于调试）
-                                        if attempts % 20 == 0 && attempts > 0 {
-                                            println!("⚠️  无法读取窗口 URL: {}", e);
+                                            Err(e) => {
+                                                eprintln!("❌ URL 解码失败: {}", e);
+                                            }
                                         }
                                     }
                                 }
