@@ -42,18 +42,21 @@
             const hasSignature = cookies.includes('__ac_signature=');
 
             // 检查是否已经成功进入正常页面
+            const cookieCount = cookies.split(';').length;
             const isOnNormalPage = (currentUrl.includes('live.douyin.com') ||
                                    currentUrl.includes('www.douyin.com')) &&
                                   cookies.length > 50;
 
-            // 如果已经离开验证码页面，并且有Cookie，说明验证成功
-            if ((hasSessionId || hasPassportToken || hasOdinToken || hasSignature || isOnNormalPage)) {
+            // 如果已经离开验证码页面，并且有足够的Cookie（>20个），说明页面已正常加载
+            // 降低要求：只要不在验证码页面且有20+个Cookie就认为成功
+            if ((hasSessionId || hasPassportToken || hasOdinToken || hasSignature || isOnNormalPage || cookieCount >= 20)) {
                 loginDetected = true;
                 console.log('✅ 检测到验证码验证完成或登录成功！');
-                console.log('🍪 Cookie 数量:', cookies.split(';').length);
+                console.log('🍪 Cookie 数量:', cookieCount);
                 console.log('📍 当前页面:', currentUrl);
                 console.log('📝 页面标题:', pageTitle);
                 console.log('🔍 已确认不在验证码页面');
+                console.log('✅ Cookie 条件满足，开始保存');
 
                 // 自动保存 Cookie
                 saveCookies(cookies);
@@ -61,7 +64,7 @@
                 // 停止检查
                 clearInterval(loginCheckInterval);
             } else if (checkCount % 10 === 0) {
-                console.log(`⏳ 已离开验证码页面，但Cookie不足，继续等待... (${checkCount}秒)`);
+                console.log(`⏳ 已离开验证码页面，但Cookie不足 (${cookieCount}个)，继续等待... (${checkCount}秒)`);
             }
         } else if (checkCount % 10 === 0) {
             // 每 10 秒输出一次检查状态
