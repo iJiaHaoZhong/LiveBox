@@ -66,17 +66,24 @@
                 // 尝试从多个来源提取数据
                 const data = extractFromPage();
 
+                // 输出详细的提取结果
+                console.log('🔍 提取结果:');
+                console.log('  - 标题:', data.title || '(空)');
+                console.log('  - 主播ID:', data.user_unique_id || '(空)');
+                console.log('  - 推流地址:', data.stream_url || '(空)');
+                console.log('  - room_store 长度:', data.room_store.length);
+
                 if (data && data.title) {
                     dataExtracted = true;
                     console.log('✅ 成功提取直播间数据！');
                     console.log('📝 标题:', data.title);
-                    console.log('🎬 主播ID:', data.user_unique_id);
+                    console.log('🎬 主播ID:', data.user_unique_id || '(未找到)');
                     console.log('🔗 推流地址:', data.stream_url ? '已找到' : '未找到');
 
                     sendData(data);
                     clearInterval(extractInterval);
                 } else {
-                    console.log('⚠️ 提取的数据不完整，继续尝试...');
+                    console.log('⚠️ 提取的数据不完整（标题为空），继续尝试...');
                 }
             } catch (error) {
                 console.error('❌ 提取数据时出错:', error);
@@ -103,13 +110,27 @@
             const stateData = window.__INITIAL_STATE__ || window.ROOM_DATA || window.__INITIAL_PROPS__;
             console.log('找到状态数据:', Object.keys(stateData));
 
-            // 深度搜索数据结构
-            const searchResult = deepSearch(stateData, ['title', 'nickname', 'roomId', 'user_unique_id', 'stream_url']);
+            // 深度搜索数据结构（扩展搜索更多字段名）
+            const searchKeys = [
+                'title', 'nickname', 'room_title', 'roomTitle',  // 标题相关
+                'user_unique_id', 'userId', 'user_id', 'roomId', 'room_id', 'web_rid',  // ID 相关
+                'stream_url', 'pull_url', 'streamUrl', 'flv_pull_url', 'hls_pull_url'  // 推流地址相关
+            ];
+            const searchResult = deepSearch(stateData, searchKeys);
             console.log('深度搜索结果:', searchResult);
+            console.log('完整数据对象键:', Object.keys(stateData));
 
-            data.title = searchResult.title || searchResult.nickname || '';
-            data.user_unique_id = searchResult.user_unique_id || searchResult.roomId || '';
-            data.stream_url = searchResult.stream_url || '';
+            // 提取标题
+            data.title = searchResult.title || searchResult.nickname || searchResult.room_title || searchResult.roomTitle || '';
+
+            // 提取主播ID
+            data.user_unique_id = searchResult.user_unique_id || searchResult.userId || searchResult.user_id ||
+                                 searchResult.roomId || searchResult.room_id || searchResult.web_rid || '';
+
+            // 提取推流地址
+            data.stream_url = searchResult.stream_url || searchResult.pull_url || searchResult.streamUrl ||
+                             searchResult.flv_pull_url || searchResult.hls_pull_url || '';
+
             data.room_store = JSON.stringify(stateData);
         }
 

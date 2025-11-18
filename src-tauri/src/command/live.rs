@@ -90,16 +90,25 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
 
                                         println!("📝 标题: {}", title);
                                         println!("👤 主播ID: {}", unique_id);
+                                        println!("📊 room_info 长度: {} 字符", room_info.len());
 
-                                        // 关闭窗口
-                                        let _ = window.close();
+                                        // 验证数据完整性：至少要有标题
+                                        if title.is_empty() {
+                                            println!("⚠️  [get_live_html] 数据不完整（标题为空），继续等待...");
+                                            // 清除 hash，让脚本继续提取
+                                            // 不关闭窗口，继续等待
+                                        } else {
+                                            println!("✅ [get_live_html] 数据验证通过，关闭窗口");
+                                            // 关闭窗口
+                                            let _ = window.close();
 
-                                        // 返回数据
-                                        return Ok(LiveInfo {
-                                            room_info,
-                                            ttwid,
-                                            unique_id,
-                                        });
+                                            // 返回数据
+                                            return Ok(LiveInfo {
+                                                room_info,
+                                                ttwid,
+                                                unique_id,
+                                            });
+                                        }
                                     }
                                     Err(e) => {
                                         println!("❌ [get_live_html] JSON 解析失败: {}", e);
