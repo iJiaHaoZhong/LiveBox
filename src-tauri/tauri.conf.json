@@ -34,14 +34,17 @@
             "dangerousRemoteDomainIpcAccess": [
                 {
                     "domain": "live.douyin.com",
+                    "windows": ["douyinLogin"],
                     "enableTauriAPI": true
                 },
                 {
                     "domain": "www.douyin.com",
+                    "windows": ["douyinLogin"],
                     "enableTauriAPI": true
                 },
                 {
                     "domain": "douyin.com",
+                    "windows": ["douyinLogin"],
                     "enableTauriAPI": true
                 }
             ]
