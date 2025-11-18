@@ -22,42 +22,53 @@
         // 获取当前页面的所有 Cookie
         const cookies = document.cookie;
 
-        // 检查是否有登录相关的 Cookie
-        // 抖音登录后通常会有 sessionid, passport_auth_token 等 Cookie
-        const hasSessionId = cookies.includes('sessionid=');
-        const hasPassportToken = cookies.includes('passport_auth_token=');
-        const hasOdinToken = cookies.includes('odin_tt=');
-        const hasSignature = cookies.includes('__ac_signature=');
-
         // 检查页面是否已经不是验证码页面了（验证码完成后会跳转）
         const currentUrl = window.location.href;
-        const isOnCaptchaPage = document.title.includes('验证码') ||
-                               document.body.innerHTML.includes('验证码中间页') ||
-                               document.body.innerHTML.includes('middle_page_loading');
+        const pageTitle = document.title || '';
+        const pageHtml = document.body ? document.body.innerHTML : '';
 
-        // 检查是否已经成功进入正常页面（验证码验证成功）
-        const isOnNormalPage = (currentUrl.includes('live.douyin.com') ||
-                               currentUrl.includes('www.douyin.com')) &&
-                              !isOnCaptchaPage &&
-                              cookies.length > 50; // 有一定数量的 Cookie
+        const isOnCaptchaPage = pageTitle.includes('验证码') ||
+                               pageHtml.includes('验证码中间页') ||
+                               pageHtml.includes('middle_page_loading') ||
+                               pageHtml.includes('TTGCaptcha');
 
-        // 如果检测到任何一个关键 Cookie，或者验证码已完成，说明可能已登录
-        if ((hasSessionId || hasPassportToken || hasOdinToken || hasSignature || isOnNormalPage) && !loginDetected) {
-            loginDetected = true;
-            console.log('✅ 检测到登录或验证码验证完成！');
-            console.log('🍪 Cookie 数量:', cookies.split(';').length);
-            console.log('📍 当前页面:', currentUrl);
-            console.log('🔍 是否在验证码页面:', isOnCaptchaPage);
+        // 只有在【不在验证码页面】时才检测Cookie
+        // 这样可以避免提取到还没有通过验证的旧Cookie
+        if (!isOnCaptchaPage && !loginDetected) {
+            // 检查是否有登录相关的 Cookie
+            const hasSessionId = cookies.includes('sessionid=');
+            const hasPassportToken = cookies.includes('passport_auth_token=');
+            const hasOdinToken = cookies.includes('odin_tt=');
+            const hasSignature = cookies.includes('__ac_signature=');
 
-            // 自动保存 Cookie
-            saveCookies(cookies);
+            // 检查是否已经成功进入正常页面
+            const isOnNormalPage = (currentUrl.includes('live.douyin.com') ||
+                                   currentUrl.includes('www.douyin.com')) &&
+                                  cookies.length > 50;
 
-            // 停止检查
-            clearInterval(loginCheckInterval);
+            // 如果已经离开验证码页面，并且有Cookie，说明验证成功
+            if ((hasSessionId || hasPassportToken || hasOdinToken || hasSignature || isOnNormalPage)) {
+                loginDetected = true;
+                console.log('✅ 检测到验证码验证完成或登录成功！');
+                console.log('🍪 Cookie 数量:', cookies.split(';').length);
+                console.log('📍 当前页面:', currentUrl);
+                console.log('📝 页面标题:', pageTitle);
+                console.log('🔍 已确认不在验证码页面');
+
+                // 自动保存 Cookie
+                saveCookies(cookies);
+
+                // 停止检查
+                clearInterval(loginCheckInterval);
+            } else if (checkCount % 10 === 0) {
+                console.log(`⏳ 已离开验证码页面，但Cookie不足，继续等待... (${checkCount}秒)`);
+            }
         } else if (checkCount % 10 === 0) {
             // 每 10 秒输出一次检查状态
-            const statusMsg = isOnCaptchaPage ? '等待验证码验证...' : '等待登录...';
-            console.log(`⏳ ${statusMsg} (${checkCount}秒)`);
+            console.log(`⏳ 等待验证码验证... (${checkCount}秒)`);
+            console.log(`   当前页面: ${currentUrl}`);
+            console.log(`   页面标题: ${pageTitle}`);
+            console.log(`   是否在验证码页面: ${isOnCaptchaPage}`);
         }
     }
 
