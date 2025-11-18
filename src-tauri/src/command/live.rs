@@ -16,14 +16,12 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
     // 第一次尝试获取直播间信息
     let result = live_req.get_room_info().await;
 
-    match result {
-        Ok(info) => Ok(info),
-        Err(e) => {
-            // 立即转换为 String，避免 Send 问题
-            let error_msg = e.to_string();
-            // 释放 e，避免跨越 await 点
-            drop(e);
+    // 立即将 Result 转换为 Result<LiveInfo, String>，避免 Send 问题
+    let result_string: Result<LiveInfo, String> = result.map_err(|e| e.to_string());
 
+    match result_string {
+        Ok(info) => Ok(info),
+        Err(error_msg) => {
             // 检查是否为 Access Denied 错误
             if error_msg == ERROR_ACCESS_DENIED {
                 println!("🔐 检测到需要登录，自动打开登录窗口...");
