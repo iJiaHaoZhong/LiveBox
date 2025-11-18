@@ -68,39 +68,37 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                     Ok(data) => {
                                         println!("✅ [get_live_html] 数据解析成功！");
 
-                                        // 提取字段
+                                        // 提取字段并映射到 LiveInfo 结构
                                         let title = data.get("title")
                                             .and_then(|v| v.as_str())
                                             .unwrap_or("")
                                             .to_string();
 
-                                        let user_unique_id = data.get("user_unique_id")
+                                        let unique_id = data.get("user_unique_id")
                                             .and_then(|v| v.as_str())
                                             .unwrap_or("")
                                             .to_string();
 
-                                        let stream_url = data.get("stream_url")
+                                        // room_info 存储完整的数据 JSON
+                                        let room_info = data.get("room_store")
                                             .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
+                                            .map(|s| s.to_string())
+                                            .unwrap_or_else(|| decoded_data.to_string());
 
-                                        let room_store = data.get("room_store")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
+                                        // ttwid 从 cookie 中提取（如果有）
+                                        let ttwid = String::new(); // 暂时留空，因为浏览器环境不需要单独提取
 
                                         println!("📝 标题: {}", title);
-                                        println!("👤 主播ID: {}", user_unique_id);
+                                        println!("👤 主播ID: {}", unique_id);
 
                                         // 关闭窗口
                                         let _ = window.close();
 
                                         // 返回数据
                                         return Ok(LiveInfo {
-                                            stream_url,
-                                            title,
-                                            user_unique_id,
-                                            room_store,
+                                            room_info,
+                                            ttwid,
+                                            unique_id,
                                         });
                                     }
                                     Err(e) => {
