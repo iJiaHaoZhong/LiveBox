@@ -13,7 +13,15 @@ pub struct DouYinReq {
 // 为抖音请求的结构体添加方法
 impl DouYinReq {
     pub fn new(url: &str) -> Self {
-        let client = Client::builder().cookie_store(true).build().unwrap();
+        let client = Client::builder()
+            .cookie_store(true)
+            .use_rustls_tls() // 使用 rustls TLS 实现（模拟现代浏览器）
+            .gzip(true) // 启用 gzip 压缩
+            .brotli(true) // 启用 brotli 压缩
+            .deflate(true) // 启用 deflate 压缩
+            .http2_adaptive_window(true) // HTTP/2 自适应窗口
+            .build()
+            .unwrap();
         DouYinReq {
             request: client,
             room_url: String::from(url),
@@ -27,10 +35,12 @@ impl DouYinReq {
         // 第一步：先访问 douyin.com 主页，获取必要的 Cookie（避免 Access Denied）
         println!("步骤1: 访问 douyin.com 获取初始 Cookie...");
         let mut home_headers = reqwest::header::HeaderMap::new();
-        home_headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8".parse()?);
-        home_headers.insert("accept-language", "zh-CN,zh;q=0.9,en;q=0.8".parse()?);
+        home_headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7".parse()?);
+        home_headers.insert("accept-encoding", "gzip, deflate, br, zstd".parse()?);
+        home_headers.insert("accept-language", "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6".parse()?);
         home_headers.insert("cache-control", "max-age=0".parse()?);
-        home_headers.insert("sec-ch-ua", "\"Chromium\";v=\"124\", \"Google Chrome\";v=\"124\", \"Not-A.Brand\";v=\"99\"".parse()?);
+        home_headers.insert("dnt", "1".parse()?);
+        home_headers.insert("sec-ch-ua", "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"".parse()?);
         home_headers.insert("sec-ch-ua-mobile", "?0".parse()?);
         home_headers.insert("sec-ch-ua-platform", "\"Windows\"".parse()?);
         home_headers.insert("sec-fetch-dest", "document".parse()?);
@@ -38,7 +48,10 @@ impl DouYinReq {
         home_headers.insert("sec-fetch-site", "none".parse()?);
         home_headers.insert("sec-fetch-user", "?1".parse()?);
         home_headers.insert("upgrade-insecure-requests", "1".parse()?);
-        home_headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+        home_headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".parse()?);
+
+        // 添加人类行为模拟：延迟 1 秒后再访问（模拟用户浏览行为）
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
         let home_response = self.request.get("https://www.douyin.com/").headers(home_headers).send().await?;
         let home_cookies = home_response.cookies();
@@ -80,12 +93,15 @@ impl DouYinReq {
         };
 
         let mut headers = reqwest::header::HeaderMap::new();
+        // 严格按照浏览器请求头的顺序和格式
         headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7".parse()?);
-        headers.insert("accept-language", "zh-CN,zh;q=0.9,en;q=0.8".parse()?);
+        headers.insert("accept-encoding", "gzip, deflate, br, zstd".parse()?);
+        headers.insert("accept-language", "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6".parse()?);
         headers.insert("cache-control", "max-age=0".parse()?);
+        headers.insert("dnt", "1".parse()?); // Do Not Track
         headers.insert("priority", "u=0, i".parse()?);
         headers.insert("referer", "https://www.douyin.com/".parse()?);
-        headers.insert("sec-ch-ua", "\"Chromium\";v=\"124\", \"Google Chrome\";v=\"124\", \"Not-A.Brand\";v=\"99\"".parse()?);
+        headers.insert("sec-ch-ua", "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"".parse()?);
         headers.insert("sec-ch-ua-mobile", "?0".parse()?);
         headers.insert("sec-ch-ua-platform", "\"Windows\"".parse()?);
         headers.insert("sec-fetch-dest", "document".parse()?);
@@ -93,7 +109,7 @@ impl DouYinReq {
         headers.insert("sec-fetch-site", "same-origin".parse()?);
         headers.insert("sec-fetch-user", "?1".parse()?);
         headers.insert("upgrade-insecure-requests", "1".parse()?);
-        headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".parse()?);
+        headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".parse()?);
 
         // 如果有保存的 Cookie，添加到请求头
         let using_saved_cookies = saved_cookies.is_some();
