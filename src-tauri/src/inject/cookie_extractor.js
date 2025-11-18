@@ -334,18 +334,48 @@
     console.log('🚀 开始监听登录状态...');
     console.log('⏳ 等待页面加载完成（1秒后开始检测）...');
 
-    // 触发验证码检测：主动刷新页面强制重新验证
-    // 浏览器直接访问可能绕过验证码，但刷新后会触发验证
-    // 使用 sessionStorage 标记，只刷新一次
-    const hasRefreshed = sessionStorage.getItem('captcha_refreshed');
-    if (!hasRefreshed) {
-        setTimeout(() => {
-            console.log('🔄 主动刷新页面以触发验证码检测...');
-            sessionStorage.setItem('captcha_refreshed', 'true');
-            window.location.reload();
+    // 触发验证码检测：在浏览器中主动发起 HTTP 请求
+    // 浏览器直接访问可能绕过验证码，但 fetch 请求会触发验证
+    const hasFetched = sessionStorage.getItem('captcha_fetch_triggered');
+    if (!hasFetched) {
+        setTimeout(async () => {
+            try {
+                console.log('🔄 主动发起 HTTP 请求以触发验证码检测...');
+                sessionStorage.setItem('captcha_fetch_triggered', 'true');
+
+                // 发起和后端相同的 HTTP 请求
+                const response = await fetch(window.location.href, {
+                    method: 'GET',
+                    credentials: 'include', // 包含 cookies
+                    headers: {
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                        'Accept-Language': 'zh-CN,zh;q=0.9',
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache',
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'same-origin',
+                        'User-Agent': navigator.userAgent
+                    }
+                });
+
+                const html = await response.text();
+                console.log('📄 HTTP 请求完成，响应长度:', html.length);
+
+                // 检查响应是否包含验证码
+                if (html.includes('验证码中间页') || html.includes('middle_page_loading') || html.includes('TTGCaptcha')) {
+                    console.log('⚠️  HTTP 请求返回验证码页面！重定向到验证码页面...');
+                    // 导航到验证码页面 - 触发验证码显示
+                    window.location.reload();
+                } else {
+                    console.log('✓ HTTP 请求成功，未遇到验证码');
+                }
+            } catch (error) {
+                console.error('❌ HTTP 请求失败:', error);
+            }
         }, 2000);
     } else {
-        console.log('✓ 页面已刷新过，开始正常检测');
+        console.log('✓ 已触发过 HTTP 请求检测');
     }
 
     // 每秒检查一次登录状态（不立即执行，给页面加载时间）
