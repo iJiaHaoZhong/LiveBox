@@ -92,10 +92,16 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                         println!("👤 主播ID: {}", unique_id);
                                         println!("📊 room_info 长度: {} 字符", room_info.len());
 
-                                        // 验证数据完整性：至少要有标题
-                                        if title.is_empty() {
-                                            println!("⚠️  [get_live_html] 数据不完整（标题为空），继续等待...");
-                                            // 清除 hash，让脚本继续提取
+                                        // 验证数据完整性：必须有标题 AND (主播ID 或 room_info)
+                                        let has_valid_data = !title.is_empty() && (!unique_id.is_empty() || room_info.len() > 100);
+
+                                        if !has_valid_data {
+                                            if title.is_empty() {
+                                                println!("⚠️  [get_live_html] 数据不完整：标题为空，继续等待...");
+                                            } else if unique_id.is_empty() && room_info.len() <= 100 {
+                                                println!("⚠️  [get_live_html] 数据不完整：缺少主播ID和完整数据，继续等待...");
+                                                println!("💡 提示：请在浏览器控制台查看提取日志，了解提取情况");
+                                            }
                                             // 不关闭窗口，继续等待
                                         } else {
                                             println!("✅ [get_live_html] 数据验证通过，关闭窗口");
