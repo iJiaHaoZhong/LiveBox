@@ -85,11 +85,15 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                             .map(|s| s.to_string())
                                             .unwrap_or_else(|| decoded_data.to_string());
 
-                                        // ttwid 从 cookie 中提取（如果有）
-                                        let ttwid = String::new(); // 暂时留空，因为浏览器环境不需要单独提取
+                                        // ttwid 从 JavaScript 提取的 Cookie
+                                        let ttwid = data.get("ttwid")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
 
                                         println!("📝 标题: {}", title);
                                         println!("👤 主播ID: {}", unique_id);
+                                        println!("🍪 ttwid: {}", if ttwid.is_empty() { "(未提取)" } else { "已提取" });
                                         println!("📊 room_info 长度: {} 字符", room_info.len());
 
                                         // 验证数据完整性：必须有标题 AND (主播ID 或 room_info)
