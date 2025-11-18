@@ -1,296 +1,22 @@
-// 直播间数据提取脚本
-// 在浏览器窗口中运行，直接从页面提取直播间信息
-
 (function() {
+    'use strict';
+
     console.log('🔧 直播间数据提取脚本已加载');
 
-    let dataExtracted = false;
-    let checkCount = 0;
-    const MAX_CHECKS = 60; // 最多检查 60 秒
-
-    // 提取直播间数据的函数
-    function extractLiveRoomData() {
-        checkCount++;
-
-        if (checkCount > MAX_CHECKS) {
-            console.log('⏱ 超时：未能提取数据');
-            sendError('timeout', '提取数据超时（60秒）');
-            clearInterval(extractInterval);
-            return;
-        }
-
-        // 检查页面是否加载完成
-        const currentUrl = window.location.href;
-        const pageTitle = document.title || '';
-        const pageHtml = document.body ? document.body.innerHTML : '';
-        const pageHtmlLength = pageHtml.length;
-
-        // 确保页面已加载
-        if (pageHtmlLength < 1000) {
-            if (checkCount % 5 === 0) {
-                console.log(`⏳ 等待页面加载... (${checkCount}秒)`);
-            }
-            return;
-        }
-
-        // 检查是否在验证码页面
-        const isOnCaptchaPage = pageTitle.includes('验证码') ||
-                               pageHtml.includes('验证码中间页') ||
-                               pageHtml.includes('middle_page_loading') ||
-                               pageHtml.includes('TTGCaptcha');
-
-        if (isOnCaptchaPage) {
-            if (checkCount % 5 === 0) {
-                console.log(`⏳ 等待验证码验证... (${checkCount}秒)`);
-            }
-            return;
-        }
-
-        // 检查是否成功加载直播间页面
-        const hasLiveRoomContent = pageHtml.includes('live_room') ||
-                                  pageHtml.includes('room_data') ||
-                                  pageHtml.includes('webcast');
-
-        if (!hasLiveRoomContent) {
-            if (checkCount % 5 === 0) {
-                console.log(`⏳ 等待直播间页面加载... (${checkCount}秒)`);
-            }
-            return;
-        }
-
-        // 页面已加载完成，开始提取数据
-        if (!dataExtracted) {
-            console.log('✅ 直播间页面已加载，开始提取数据...');
-
-            try {
-                // 尝试从多个来源提取数据
-                const data = extractFromPage();
-
-                // 输出详细的提取结果
-                console.log('🔍 提取结果:');
-                console.log('  - 标题:', data.title || '(空)');
-                console.log('  - 主播ID:', data.user_unique_id || '(空)');
-                console.log('  - 推流地址:', data.stream_url || '(空)');
-                console.log('  - room_store 长度:', data.room_store.length);
-
-                if (data && data.title) {
-                    dataExtracted = true;
-                    console.log('✅ 成功提取直播间数据！');
-                    console.log('📝 标题:', data.title);
-                    console.log('🎬 主播ID:', data.user_unique_id || '(未找到)');
-                    console.log('🔗 推流地址:', data.stream_url ? '已找到' : '未找到');
-
-                    sendData(data);
-                    clearInterval(extractInterval);
-                } else {
-                    console.log('⚠️ 提取的数据不完整（标题为空），继续尝试...');
-                }
-            } catch (error) {
-                console.error('❌ 提取数据时出错:', error);
-                sendError('extract_failed', error.message);
-                clearInterval(extractInterval);
-            }
-        }
-    }
-
-    // 从页面提取数据
-    function extractFromPage() {
-        const data = {
-            title: '',
-            user_unique_id: '',
-            stream_url: '',
-            room_store: ''
-        };
-
-        // 方法1: 从 window.__STORE__ 对象中查找（抖音实际使用的数据结构）
-        if (window.__STORE__) {
-            console.log('📦 从 window.__STORE__ 提取数据...');
-            console.log('找到 STORE，包含键:', Object.keys(window.__STORE__));
-
-            try {
-                const store = window.__STORE__;
-
-                // 从 roomStore 提取直播间信息
-                if (store.roomStore && store.roomStore.roomInfo) {
-                    console.log('✓ 找到 roomStore');
-                    const roomInfo = store.roomStore.roomInfo;
-
-                    // 正确的字段路径：roomInfo.room.title
-                    data.title = roomInfo.room?.title || '';
-
-                    // 提取房间ID
-                    const roomId = roomInfo.roomId || roomInfo.web_rid || '';
-
-                    console.log('  roomStore 标题:', data.title || '(未找到)');
-                    console.log('  roomStore 房间ID:', roomId || '(未找到)');
-                }
-
-                // 从 userStore 提取用户信息
-                if (store.userStore && store.userStore.userInfo) {
-                    console.log('✓ 找到 userStore');
-                    const userInfo = store.userStore.userInfo;
-
-                    // 调试：输出 userInfo 中的所有可用键
-                    console.log('  userInfo 可用字段:', Object.keys(userInfo).filter(k => !k.startsWith('$') && !k.startsWith('_')));
-
-                    // 正确的字段路径：userInfo.display_id 或 userInfo.id_str
-                    data.user_unique_id = userInfo.display_id || userInfo.id_str || userInfo.web_rid || '';
-
-                    // 调试：输出各个字段的值
-                    console.log('  display_id:', userInfo.display_id);
-                    console.log('  id_str:', userInfo.id_str);
-                    console.log('  web_rid:', userInfo.web_rid);
-                    console.log('  userStore 用户ID:', data.user_unique_id || '(未找到)');
-                }
-
-                // 从 streamStore 提取推流信息
-                if (store.streamStore && store.streamStore.streamData) {
-                    console.log('✓ 找到 streamStore');
-                    const streamData = store.streamStore.streamData;
-
-                    // 正确的字段路径：streamData.H264_streamData.stream.{quality}.main.flv
-                    // 尝试提取推流地址（从 H264 或 H265，优先高清晰度）
-                    const h264Data = streamData.H264_streamData;
-                    const h265Data = streamData.H265_streamData;
-
-                    // 按清晰度优先级提取：原画 > 蓝光 > 超清 > 高清 > 标清
-                    data.stream_url = h264Data?.stream?.origin?.main?.flv ||
-                                     h264Data?.stream?.uhd?.main?.flv ||
-                                     h264Data?.stream?.hd?.main?.flv ||
-                                     h264Data?.stream?.sd?.main?.flv ||
-                                     h264Data?.stream?.ld?.main?.flv ||
-                                     // 如果 flv 都没有，尝试 hls
-                                     h264Data?.stream?.origin?.main?.hls ||
-                                     h264Data?.stream?.uhd?.main?.hls ||
-                                     h264Data?.stream?.hd?.main?.hls ||
-                                     h264Data?.stream?.sd?.main?.hls ||
-                                     h264Data?.stream?.ld?.main?.hls ||
-                                     // 尝试 H265
-                                     h265Data?.stream?.origin?.main?.flv ||
-                                     h265Data?.stream?.uhd?.main?.flv ||
-                                     h265Data?.stream?.hd?.main?.flv ||
-                                     h265Data?.stream?.sd?.main?.flv ||
-                                     h265Data?.stream?.ld?.main?.flv || '';
-
-                    console.log('  streamStore 推流地址:', data.stream_url ? '已找到' : '(未找到)');
-                }
-
-                // 将整个 STORE 序列化存储（使用 JSON.stringify 处理 MobX 对象）
-                try {
-                    // MobX 对象需要转换为普通对象
-                    const storeData = {
-                        roomStore: toPlainObject(store.roomStore),
-                        userStore: toPlainObject(store.userStore),
-                        streamStore: toPlainObject(store.streamStore),
-                    };
-                    data.room_store = JSON.stringify(storeData);
-                    console.log('✓ 序列化 store 数据，长度:', data.room_store.length);
-                } catch (e) {
-                    console.warn('⚠️  序列化 store 失败:', e.message);
-                    // 备用方案：只存储基本信息
-                    data.room_store = JSON.stringify({
-                        title: data.title,
-                        user_unique_id: data.user_unique_id,
-                        stream_url: data.stream_url
-                    });
-                }
-
-            } catch (error) {
-                console.error('❌ 从 __STORE__ 提取数据时出错:', error);
-            }
-        }
-
-        // 方法2: 从页面 HTML 中的 script 标签提取
-        if (!data.title) {
-            console.log('📄 从 HTML script 标签提取数据...');
-            const scripts = document.querySelectorAll('script');
-
-            for (let script of scripts) {
-                const content = script.textContent || script.innerHTML;
-
-                // 查找包含 ROOM 或 INITIAL 的数据
-                if (content.includes('ROOM') || content.includes('INITIAL') || content.includes('roomStore')) {
-                    try {
-                        // 尝试提取 JSON 数据
-                        const jsonMatch = content.match(/\{[\s\S]*"title"[\s\S]*\}/);
-                        if (jsonMatch) {
-                            const jsonData = JSON.parse(jsonMatch[0]);
-                            const searchResult = deepSearch(jsonData, ['title', 'nickname', 'user_unique_id']);
-
-                            data.title = data.title || searchResult.title || searchResult.nickname || '';
-                            data.user_unique_id = data.user_unique_id || searchResult.user_unique_id || '';
-
-                            if (data.title) {
-                                console.log('✓ 从 script 标签中找到数据');
-                                break;
-                            }
-                        }
-                    } catch (e) {
-                        // 忽略解析错误，继续查找
-                    }
-                }
-            }
-        }
-
-        // 方法3: 从页面元素中提取
-        if (!data.title) {
-            console.log('🏷️ 从页面元素提取数据...');
-
-            // 尝试从 meta 标签获取标题
-            const titleMeta = document.querySelector('meta[property="og:title"]') ||
-                             document.querySelector('meta[name="title"]');
-            if (titleMeta) {
-                data.title = titleMeta.getAttribute('content') || '';
-            }
-
-            // 如果还是没有，使用 document.title
-            if (!data.title) {
-                data.title = document.title.replace(/[-_].*$/, '').trim();
-            }
-        }
-
-        return data;
-    }
-
-    // 深度搜索对象中的键
-    function deepSearch(obj, keys, maxDepth = 10, currentDepth = 0) {
-        const result = {};
-
-        if (currentDepth > maxDepth || !obj || typeof obj !== 'object') {
-            return result;
-        }
-
-        for (let key in obj) {
-            if (keys.includes(key)) {
-                result[key] = obj[key];
-            }
-
-            if (typeof obj[key] === 'object' && obj[key] !== null) {
-                const childResult = deepSearch(obj[key], keys, maxDepth, currentDepth + 1);
-                Object.assign(result, childResult);
-            }
-        }
-
-        return result;
-    }
-
-    // 将 MobX observable 对象转换为普通对象
+    // 将 MobX Proxy 对象转换为普通对象
     function toPlainObject(obj, maxDepth = 5, currentDepth = 0) {
         if (currentDepth > maxDepth || obj === null || obj === undefined) {
             return obj;
         }
 
-        // 基本类型直接返回
         if (typeof obj !== 'object') {
             return obj;
         }
 
-        // 数组
         if (Array.isArray(obj)) {
             return obj.map(item => toPlainObject(item, maxDepth, currentDepth + 1));
         }
 
-        // 对象
         const plainObj = {};
         for (let key in obj) {
             // 跳过 MobX 内部属性和函数
@@ -309,76 +35,185 @@
         return plainObj;
     }
 
-    // 发送数据给后端
-    function sendData(data) {
+    // 等待页面加载和数据就绪
+    let checkCount = 0;
+    const maxChecks = 30; // 最多检查 30 次（15秒）
+    const checkInterval = 500; // 每 500ms 检查一次
+
+    const intervalId = setInterval(() => {
+        checkCount++;
+
+        // 检查文档是否加载完成
+        if (document.readyState !== 'complete' && checkCount < maxChecks) {
+            console.log(`⏳ 等待页面加载... (${checkCount * 0.5}秒)`);
+            return;
+        }
+
+        // 检查是否有 __STORE__ 对象
+        if (!window.__STORE__) {
+            if (checkCount < maxChecks) {
+                console.log(`⏳ 等待 __STORE__ 就绪... (${checkCount * 0.5}秒)`);
+                return;
+            } else {
+                console.log('❌ 超时：未找到 window.__STORE__ 对象');
+                clearInterval(intervalId);
+                return;
+            }
+        }
+
+        // 数据提取逻辑
+        console.log('✅ 直播间页面已加载，开始提取数据...');
+        clearInterval(intervalId);
+
         try {
-            // URL 编码数据
-            const encodedData = encodeURIComponent(JSON.stringify(data));
-            window.location.hash = '__LIVE_DATA__=' + encodedData;
+            extractFromPage();
+        } catch (e) {
+            console.log('❌ 数据提取出错:', e);
+        }
+    }, checkInterval);
+
+    function extractFromPage() {
+        console.log('🔍 开始从页面提取直播间数据...');
+
+        // 初始化数据结构（用于传递给后端）
+        let data = {
+            title: '',           // 直播间标题（用于显示）
+            user_unique_id: '', // 访问者的唯一ID（用于生成 WebSocket 签名）
+            room_store: ''      // 直播间完整信息的 JSON 字符串（包含 room_id 等）
+        };
+
+        // 从 window.__STORE__ 对象提取数据（抖音实际使用的数据结构）
+        if (window.__STORE__) {
+            console.log('📦 从 window.__STORE__ 提取数据...');
+            console.log('找到 STORE，包含键:', Object.keys(window.__STORE__));
+
+            try {
+                const store = window.__STORE__;
+
+                // 1. 从 roomStore 提取直播间信息
+                if (store.roomStore && store.roomStore.roomInfo) {
+                    console.log('✓ 找到 roomStore.roomInfo');
+                    const roomInfo = store.roomStore.roomInfo;
+
+                    // 提取标题
+                    data.title = roomInfo.room?.title || roomInfo.title || '';
+
+                    // 转换 roomInfo 为普通对象并序列化
+                    // 这是关键数据，包含 room.id_str (room_id) 等信息
+                    const plainRoomInfo = toPlainObject(roomInfo, 3);
+                    data.room_store = JSON.stringify(plainRoomInfo);
+
+                    console.log('  标题:', data.title || '(未找到)');
+                    console.log('  room_id:', roomInfo.room?.id_str || roomInfo.roomId || '(未找到)');
+                    console.log('  room_store 长度:', data.room_store.length, '字符');
+                }
+
+                // 2. 尝试从多个位置提取 user_unique_id（访问者的唯一ID）
+                //    这个ID用于生成 WebSocket 连接签名，与主播ID无关
+
+                // 2.1 尝试从 Cookie 中提取 msToken 或其他标识
+                const cookies = document.cookie.split(';');
+                for (let cookie of cookies) {
+                    const [name, value] = cookie.trim().split('=');
+                    if (name === 'msToken' && value && value.length > 10) {
+                        // 使用 msToken 的一部分作为 unique_id
+                        data.user_unique_id = value.substring(0, 16);
+                        console.log('  从 Cookie msToken 提取 user_unique_id');
+                        break;
+                    }
+                }
+
+                // 2.2 如果没有从 Cookie 获取到，尝试从 userStore
+                if (!data.user_unique_id && store.userStore && store.userStore.userInfo) {
+                    const userInfo = store.userStore.userInfo;
+                    // 这些字段可能是登录用户的ID
+                    data.user_unique_id = userInfo.id_str || userInfo.web_rid || userInfo.display_id || '';
+                    if (data.user_unique_id) {
+                        console.log('  从 userStore 提取 user_unique_id:', data.user_unique_id);
+                    }
+                }
+
+                // 2.3 如果还是没有，生成一个随机的 unique_id（游客模式）
+                if (!data.user_unique_id) {
+                    // 生成 16 位数字ID（模拟游客ID）
+                    data.user_unique_id = Math.floor(Math.random() * 1e16).toString();
+                    console.log('  生成随机 user_unique_id (游客模式):', data.user_unique_id);
+                }
+
+                console.log('✓ 数据提取完成');
+                console.log('  - 标题:', data.title ? '已提取' : '未找到');
+                console.log('  - user_unique_id:', data.user_unique_id ? '已提取' : '未找到');
+                console.log('  - room_store:', data.room_store.length > 0 ? `${data.room_store.length} 字符` : '未找到');
+
+            } catch (e) {
+                console.log('❌ 从 __STORE__ 提取数据出错:', e);
+            }
+        }
+
+        // 如果没有找到有效数据，尝试其他方法
+        if (!data.title || !data.room_store) {
+            console.log('⚠️  从 __STORE__ 提取失败，尝试备用方法...');
+
+            // 备用方法1: 从 meta 标签提取标题
+            if (!data.title) {
+                const titleMeta = document.querySelector('meta[property="og:title"]');
+                if (titleMeta) {
+                    data.title = titleMeta.content;
+                    console.log('  从 meta 标签提取标题:', data.title);
+                }
+            }
+
+            // 备用方法2: 从 document.title 提取
+            if (!data.title) {
+                data.title = document.title;
+                console.log('  从 document.title 提取:', data.title);
+            }
+        }
+
+        // 输出提取结果
+        console.log('🔍 提取结果:');
+        console.log('  - 标题:', data.title || '(空)');
+        console.log('  - 主播ID:', data.user_unique_id || '(空)');
+        console.log('  - room_store 长度:', data.room_store.length);
+
+        // 构建要传递给后端的数据对象
+        const resultData = {
+            title: data.title,
+            user_unique_id: data.user_unique_id,
+            stream_url: '',  // 保留字段以兼容后端
+            room_store: JSON.stringify({
+                title: data.title,
+                user_unique_id: data.user_unique_id,
+                stream_url: ''
+            })
+        };
+
+        // 如果成功提取了 room_store，使用它
+        if (data.room_store && data.room_store.length > 50) {
+            resultData.room_store = data.room_store;
+        }
+
+        // 通过 URL hash 传递数据给后端
+        if (data.title || data.room_store) {
+            console.log('✅ 成功提取直播间数据！');
+            console.log('📝 标题:', data.title || '未找到');
+            console.log('🎬 主播ID:', data.user_unique_id || '未找到');
+            console.log('📊 room_store 长度:', resultData.room_store.length, '字符');
+
+            // 将数据编码为 URL 安全格式并设置到 hash
+            const jsonStr = JSON.stringify(resultData);
+            const encodedData = encodeURIComponent(jsonStr);
 
             console.log('✅ 数据已准备好，正在传递给后端...');
             console.log('📝 URL hash 已设置: #__LIVE_DATA__=[数据]');
 
-            showSuccessMessage();
-        } catch (error) {
-            console.error('❌ 发送数据失败:', error);
-            sendError('send_failed', error.message);
+            // 设置 hash 触发后端检测
+            window.location.hash = '__LIVE_DATA__=' + encodedData;
+
+        } else {
+            console.log('❌ 未能提取到有效的直播间数据');
         }
     }
 
-    // 发送错误信息
-    function sendError(errorType, errorMessage) {
-        const errorData = {
-            error: errorType,
-            message: errorMessage
-        };
-        const encodedData = encodeURIComponent(JSON.stringify(errorData));
-        window.location.hash = '__LIVE_ERROR__=' + encodedData;
-        console.log('❌ 错误已传递给后端');
-    }
-
-    // 显示成功消息
-    function showSuccessMessage() {
-        const messageDiv = document.createElement('div');
-        messageDiv.innerHTML = `
-            <div style="
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                padding: 30px 50px;
-                border-radius: 15px;
-                font-size: 18px;
-                font-weight: bold;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-                z-index: 999999;
-                text-align: center;
-                animation: fadeIn 0.3s ease-in;
-            ">
-                <div style="font-size: 48px; margin-bottom: 15px;">✅</div>
-                <div>数据提取成功！</div>
-                <div style="font-size: 14px; margin-top: 10px; opacity: 0.9;">窗口将自动关闭...</div>
-            </div>
-        `;
-
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translate(-50%, -60%); }
-                to { opacity: 1; transform: translate(-50%, -50%); }
-            }
-        `;
-        document.head.appendChild(style);
-        document.body.appendChild(messageDiv);
-    }
-
     console.log('🚀 开始监听页面数据...');
-
-    // 每秒检查一次
-    const extractInterval = setInterval(extractLiveRoomData, 1000);
-
-    // 立即执行一次
-    extractLiveRoomData();
 })();
