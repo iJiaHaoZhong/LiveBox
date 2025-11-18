@@ -51,10 +51,21 @@
         try {
             console.log('💾 正在保存 Cookie...');
 
+            // 详细的调试信息
+            console.log('🔍 调试信息:');
+            console.log('  - window.__TAURI__ 存在?', typeof window.__TAURI__ !== 'undefined');
+            console.log('  - window.__TAURI__.invoke 存在?', typeof window.__TAURI__?.invoke !== 'undefined');
+            console.log('  - 当前 URL:', window.location.href);
+            console.log('  - 窗口名称:', window.name);
+
             // 检查 Tauri API 是否可用
             if (typeof window.__TAURI__ === 'undefined' || typeof window.__TAURI__.invoke === 'undefined') {
-                console.error('❌ Tauri API 不可用！请检查安全配置。');
-                showErrorMessage('Tauri API 不可用，请重启应用');
+                console.error('❌ Tauri API 不可用！');
+                console.error('请确保：');
+                console.error('1. 应用已重新编译（npm run tauri dev 或 npm run tauri build）');
+                console.error('2. tauri.conf.json 中已配置 dangerousRemoteDomainIpcAccess');
+                console.error('3. 域名和窗口标签匹配正确');
+                showErrorMessage('Tauri API 不可用，请重新编译应用后再试');
                 return;
             }
 
@@ -76,7 +87,7 @@
 
         } catch (error) {
             console.error('❌ Cookie 保存失败:', error);
-            showErrorMessage(error);
+            showErrorMessage(error.toString());
         }
     }
 
@@ -108,22 +119,34 @@
             </div>
         `;
 
-        // 添加动画
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideDown {
-                from {
-                    opacity: 0;
-                    transform: translateX(-50%) translateY(-20px);
-                }
-                to {
-                    opacity: 1;
-                    transform: translateX(-50%) translateY(0);
-                }
+        // 安全地添加到 DOM
+        function addToDOMSafe() {
+            if (document.head) {
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes slideDown {
+                        from {
+                            opacity: 0;
+                            transform: translateX(-50%) translateY(-20px);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateX(-50%) translateY(0);
+                        }
+                    }
+                `;
+                document.head.appendChild(style);
             }
-        `;
-        document.head.appendChild(style);
-        document.body.appendChild(messageDiv);
+            if (document.body) {
+                document.body.appendChild(messageDiv);
+            }
+        }
+
+        if (document.body && document.head) {
+            addToDOMSafe();
+        } else {
+            window.addEventListener('DOMContentLoaded', addToDOMSafe);
+        }
     }
 
     // 显示错误提示
@@ -152,7 +175,17 @@
                 </div>
             </div>
         `;
-        document.body.appendChild(messageDiv);
+
+        // 安全地添加到 DOM
+        if (document.body) {
+            document.body.appendChild(messageDiv);
+        } else {
+            window.addEventListener('DOMContentLoaded', () => {
+                if (document.body) {
+                    document.body.appendChild(messageDiv);
+                }
+            });
+        }
     }
 
     // 显示初始提示
