@@ -110,7 +110,7 @@ pub async fn open_login_page(handle: AppHandle) -> Result<String, String> {
     }
 
     // 创建新窗口，注入自动提取 Cookie 的脚本
-    match tauri::WindowBuilder::new(
+    let window = match tauri::WindowBuilder::new(
         &handle,
         window_label,
         tauri::WindowUrl::External("https://www.douyin.com/".parse().unwrap()),
@@ -121,11 +121,94 @@ pub async fn open_login_page(handle: AppHandle) -> Result<String, String> {
     .initialization_script(include_str!("../inject/cookie_extractor.js"))
     .build()
     {
-        Ok(_) => Ok("登录窗口已打开，请在浏览器中登录抖音".to_string()),
+        Ok(win) => win,
         Err(e) => {
             let err_msg = format!("打开登录窗口失败: {}", e);
             eprintln!("{}", err_msg);
-            Err(err_msg)
+            return Err(err_msg);
         }
-    }
+    };
+
+    // 克隆 window 用于异步任务
+    let window_clone = window.clone();
+
+    // 启动一个异步任务来监听 URL 变化
+    tauri::async_runtime::spawn(async move {
+        use std::time::Duration;
+        use tokio::time::sleep;
+
+        let mut check_count = 0;
+        let max_checks = 600; // 最多检查 10 分钟
+
+        loop {
+            check_count += 1;
+
+            if check_count > max_checks {
+                println!("⏱ Cookie 提取超时（10分钟），停止监听");
+                break;
+            }
+
+            // 每秒检查一次
+            sleep(Duration::from_secs(1)).await;
+
+            // 获取当前 URL
+            let current_url = match window_clone.url() {
+                Ok(url) => url,
+                Err(_) => {
+                    // 窗口可能已关闭
+                    break;
+                }
+            };
+
+            let url_str = current_url.to_string();
+
+            // 检查是否有 Cookie 数据返回
+            if url_str.contains("#__COOKIES__=") {
+                println!("🍪 检测到 Cookie 数据！");
+
+                if let Some(hash_start) = url_str.find("#__COOKIES__=") {
+                    let cookie_data = &url_str[hash_start + 13..]; // "#__COOKIES__=" 长度为 13
+
+                    match urlencoding::decode(cookie_data) {
+                        Ok(decoded_cookies) => {
+                            println!("✅ Cookie 数据解码成功");
+
+                            // 保存 Cookie 到文件
+                            let cookie_string = decoded_cookies.to_string();
+                            let store = CookieStore::from_cookie_string(&cookie_string, ".douyin.com");
+
+                            match CookieStore::get_default_path() {
+                                Ok(path) => {
+                                    match store.save_to_file(&path) {
+                                        Ok(_) => {
+                                            println!("💾 成功保存 {} 个 cookies 到 {:?}", store.cookies.len(), path);
+
+                                            // 等待 2 秒后关闭窗口（让用户看到成功提示）
+                                            sleep(Duration::from_secs(2)).await;
+                                            let _ = window_clone.close();
+                                            println!("✅ 登录窗口已关闭");
+                                        }
+                                        Err(e) => {
+                                            eprintln!("❌ 保存 cookies 失败: {}", e);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("❌ 获取保存路径失败: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Cookie 数据解码失败: {}", e);
+                        }
+                    }
+                }
+
+                // 找到 Cookie 后停止循环
+                break;
+            }
+        }
+    });
+
+    Ok("登录窗口已打开，请在浏览器中登录抖音".to_string())
 }

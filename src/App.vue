@@ -11,6 +11,10 @@
                 开始采集
             </el-button>
 
+            <el-button type="success" class="startListen" @click="openLogin">
+                登录抖音
+            </el-button>
+
             <el-button type="primary" class="startListen" @click="openWindow">
                 新窗口
             </el-button>
@@ -186,6 +190,18 @@ const liveMsg = ref()
 // 直播播放器
 let dplayer: DPlayerImp | null = null
 let liveNum = 100
+
+// 打开登录窗口
+const openLogin = async () => {
+    try {
+        const result = await invoke('open_login_page')
+        ElMessage.success('登录窗口已打开，请在浏览器中登录抖音，登录后 Cookie 会自动保存')
+        console.log('✅ 登录窗口:', result)
+    } catch (error) {
+        ElMessage.error('打开登录窗口失败: ' + error)
+        console.error('❌ 打开登录窗口失败:', error)
+    }
+}
 
 // 新窗口
 const openWindow = () => {
