@@ -130,9 +130,16 @@
                     console.log('✓ 找到 userStore');
                     const userInfo = store.userStore.userInfo;
 
+                    // 调试：输出 userInfo 中的所有可用键
+                    console.log('  userInfo 可用字段:', Object.keys(userInfo).filter(k => !k.startsWith('$') && !k.startsWith('_')));
+
                     // 正确的字段路径：userInfo.display_id 或 userInfo.id_str
                     data.user_unique_id = userInfo.display_id || userInfo.id_str || userInfo.web_rid || '';
 
+                    // 调试：输出各个字段的值
+                    console.log('  display_id:', userInfo.display_id);
+                    console.log('  id_str:', userInfo.id_str);
+                    console.log('  web_rid:', userInfo.web_rid);
                     console.log('  userStore 用户ID:', data.user_unique_id || '(未找到)');
                 }
 
@@ -141,16 +148,29 @@
                     console.log('✓ 找到 streamStore');
                     const streamData = store.streamStore.streamData;
 
-                    // 正确的字段路径：streamData.H264_streamData
-                    // 尝试提取推流地址（从 H264 或 H265）
+                    // 正确的字段路径：streamData.H264_streamData.stream.{quality}.main.flv
+                    // 尝试提取推流地址（从 H264 或 H265，优先高清晰度）
                     const h264Data = streamData.H264_streamData;
                     const h265Data = streamData.H265_streamData;
 
-                    // 尝试从 streamData 中提取 URL
-                    data.stream_url = h264Data?.main?.flv ||
-                                     h264Data?.main?.hls ||
-                                     h265Data?.main?.flv ||
-                                     h265Data?.main?.hls || '';
+                    // 按清晰度优先级提取：原画 > 蓝光 > 超清 > 高清 > 标清
+                    data.stream_url = h264Data?.stream?.origin?.main?.flv ||
+                                     h264Data?.stream?.uhd?.main?.flv ||
+                                     h264Data?.stream?.hd?.main?.flv ||
+                                     h264Data?.stream?.sd?.main?.flv ||
+                                     h264Data?.stream?.ld?.main?.flv ||
+                                     // 如果 flv 都没有，尝试 hls
+                                     h264Data?.stream?.origin?.main?.hls ||
+                                     h264Data?.stream?.uhd?.main?.hls ||
+                                     h264Data?.stream?.hd?.main?.hls ||
+                                     h264Data?.stream?.sd?.main?.hls ||
+                                     h264Data?.stream?.ld?.main?.hls ||
+                                     // 尝试 H265
+                                     h265Data?.stream?.origin?.main?.flv ||
+                                     h265Data?.stream?.uhd?.main?.flv ||
+                                     h265Data?.stream?.hd?.main?.flv ||
+                                     h265Data?.stream?.sd?.main?.flv ||
+                                     h265Data?.stream?.ld?.main?.flv || '';
 
                     console.log('  streamStore 推流地址:', data.stream_url ? '已找到' : '(未找到)');
                 }
