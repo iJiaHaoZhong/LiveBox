@@ -299,21 +299,20 @@ const creatSokcet = async (roomId: string, uniqueId: string, ttwid: string) => {
     console.log('  signature:', sign ? '已生成' : '生成失败')
     // 组装参数
     let socketUrl = `wss://webcast5-ws-web-lf.douyin.com/webcast/im/push/v2/?room_id=${roomId}&compress=gzip&version_code=180800&webcast_sdk_version=1.0.14-beta.0&live_id=1&did_rule=3&user_unique_id=${uniqueId}&identity=audience&signature=${sign}&aid=6383&device_platform=web&browser_language=zh-CN&browser_platform=Win32&browser_name=Mozilla&browser_version=5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0.0.0+Safari%2F537.36+Edg%2F126.0.0.0`
-    // header
+    // header - 如果 ttwid 为空，就不发送 cookie（游客模式）
     const options: ConnectionConfig = {
         writeBufferSize: 20000,
-        // maxWriteBufferSize会导致不出消息
-        // maxWriteBufferSize: 20000,
-        // maxMessageSize: 20000,
-        // 下面会导致很多错误
-        // maxFrameSize: 20000,
-        // acceptUnmaskedFrames: true,
-        headers: {
+        headers: ttwid ? {
             cookie: 'ttwid=' + ttwid,
+            'user-agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0',
+        } : {
             'user-agent':
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0',
         },
     }
+
+    console.log('🔌 [WebSocket] 连接模式:', ttwid ? '使用 ttwid Cookie' : '游客模式（无 Cookie）')
     // ping消息
     const pingMsg = douyin.PushFrame.encode({ payloadType: 'hb' }).finish()
     // webscoket
