@@ -14,6 +14,68 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
     println!("🌐 [get_live_html] 使用浏览器窗口提取数据（方案1）");
     println!("💡 [get_live_html] 不使用后端 HTTP 请求，直接在浏览器中提取数据");
 
+    // ========== 步骤1: 先发送 HEAD 请求获取 ttwid Cookie ==========
+    println!("🍪 [get_live_html] 步骤1: 获取 ttwid Cookie...");
+    let mut extracted_ttwid = String::new();
+
+    match reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+    {
+        Ok(client) => {
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".parse().unwrap());
+
+            match client.head(url).headers(headers).send().await {
+                Ok(response) => {
+                    println!("📊 [get_live_html] HEAD 请求响应状态: {}", response.status());
+
+                    // 从响应的 Set-Cookie 中提取 ttwid
+                    let cookies = response.cookies();
+                    for cookie in cookies {
+                        if cookie.name() == "ttwid" {
+                            extracted_ttwid = cookie.value().to_string();
+                            println!("✅ [get_live_html] 成功提取 ttwid: {}...", &extracted_ttwid[..20.min(extracted_ttwid.len())]);
+                            break;
+                        }
+                    }
+
+                    if extracted_ttwid.is_empty() {
+                        println!("⚠️  [get_live_html] HEAD 请求未返回 ttwid，尝试 GET 请求...");
+
+                        // 如果 HEAD 没有返回 ttwid，尝试 GET
+                        match client.get(url).headers(headers).send().await {
+                            Ok(get_response) => {
+                                let get_cookies = get_response.cookies();
+                                for cookie in get_cookies {
+                                    if cookie.name() == "ttwid" {
+                                        extracted_ttwid = cookie.value().to_string();
+                                        println!("✅ [get_live_html] GET 请求成功提取 ttwid: {}...", &extracted_ttwid[..20.min(extracted_ttwid.len())]);
+                                        break;
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                println!("⚠️  [get_live_html] GET 请求失败: {}", e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("⚠️  [get_live_html] HEAD 请求失败: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            println!("❌ [get_live_html] 无法创建 HTTP 客户端: {}", e);
+        }
+    }
+
+    if extracted_ttwid.is_empty() {
+        println!("⚠️  [get_live_html] 未能获取 ttwid，WebSocket 连接可能会失败");
+    }
+
+    // ========== 步骤2: 打开浏览器窗口提取数据 ==========
     let window_label = "douyinData";
 
     // 如果窗口已存在，先关闭
@@ -23,7 +85,7 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
     }
 
     // 创建窗口，注入数据提取脚本
-    println!("🪟 [get_live_html] 打开浏览器窗口...");
+    println!("🪟 [get_live_html] 步骤2: 打开浏览器窗口...");
     match tauri::WindowBuilder::new(
         &handle,
         window_label,
@@ -85,11 +147,19 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                             .map(|s| s.to_string())
                                             .unwrap_or_else(|| decoded_data.to_string());
 
-                                        // ttwid 从 JavaScript 提取的 Cookie
-                                        let ttwid = data.get("ttwid")
+                                        // ttwid 优先使用从 HTTP 请求提取的，如果没有则尝试从 JavaScript 提取
+                                        let js_ttwid = data.get("ttwid")
                                             .and_then(|v| v.as_str())
                                             .unwrap_or("")
                                             .to_string();
+
+                                        let ttwid = if !extracted_ttwid.is_empty() {
+                                            extracted_ttwid.clone()
+                                        } else if !js_ttwid.is_empty() {
+                                            js_ttwid
+                                        } else {
+                                            String::new()
+                                        };
 
                                         println!("📝 标题: {}", title);
                                         println!("👤 主播ID: {}", unique_id);
