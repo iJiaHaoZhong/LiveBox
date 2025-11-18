@@ -111,48 +111,46 @@
                 const store = window.__STORE__;
 
                 // 从 roomStore 提取直播间信息
-                if (store.roomStore) {
+                if (store.roomStore && store.roomStore.roomInfo) {
                     console.log('✓ 找到 roomStore');
-                    const roomStore = store.roomStore;
+                    const roomInfo = store.roomStore.roomInfo;
 
-                    // 尝试提取标题
-                    data.title = roomStore.roomInfo?.title ||
-                                roomStore.title ||
-                                roomStore.room?.title || '';
+                    // 正确的字段路径：roomInfo.room.title
+                    data.title = roomInfo.room?.title || '';
 
-                    // 尝试提取房间ID
-                    const roomId = roomStore.roomInfo?.roomId ||
-                                  roomStore.roomId ||
-                                  roomStore.room?.id_str || '';
+                    // 提取房间ID
+                    const roomId = roomInfo.roomId || roomInfo.web_rid || '';
 
                     console.log('  roomStore 标题:', data.title || '(未找到)');
                     console.log('  roomStore 房间ID:', roomId || '(未找到)');
                 }
 
                 // 从 userStore 提取用户信息
-                if (store.userStore) {
+                if (store.userStore && store.userStore.userInfo) {
                     console.log('✓ 找到 userStore');
-                    const userStore = store.userStore;
+                    const userInfo = store.userStore.userInfo;
 
-                    // 尝试提取用户唯一ID
-                    data.user_unique_id = userStore.userInfo?.uniqueId ||
-                                         userStore.userInfo?.user_unique_id ||
-                                         userStore.uniqueId ||
-                                         userStore.user_unique_id || '';
+                    // 正确的字段路径：userInfo.display_id 或 userInfo.id_str
+                    data.user_unique_id = userInfo.display_id || userInfo.id_str || userInfo.web_rid || '';
 
                     console.log('  userStore 用户ID:', data.user_unique_id || '(未找到)');
                 }
 
                 // 从 streamStore 提取推流信息
-                if (store.streamStore) {
+                if (store.streamStore && store.streamStore.streamData) {
                     console.log('✓ 找到 streamStore');
-                    const streamStore = store.streamStore;
+                    const streamData = store.streamStore.streamData;
 
-                    // 尝试提取推流地址
-                    data.stream_url = streamStore.pullUrl ||
-                                     streamStore.stream_url ||
-                                     streamStore.flv_pull_url ||
-                                     streamStore.hls_pull_url || '';
+                    // 正确的字段路径：streamData.H264_streamData
+                    // 尝试提取推流地址（从 H264 或 H265）
+                    const h264Data = streamData.H264_streamData;
+                    const h265Data = streamData.H265_streamData;
+
+                    // 尝试从 streamData 中提取 URL
+                    data.stream_url = h264Data?.main?.flv ||
+                                     h264Data?.main?.hls ||
+                                     h265Data?.main?.flv ||
+                                     h265Data?.main?.hls || '';
 
                     console.log('  streamStore 推流地址:', data.stream_url ? '已找到' : '(未找到)');
                 }
