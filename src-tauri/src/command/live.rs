@@ -90,7 +90,40 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
     }
 
     if extracted_ttwid.is_empty() {
-        println!("⚠️  [get_live_html] 未能获取 ttwid，WebSocket 连接可能会失败");
+        println!("⚠️  [get_live_html] HTTP 请求未能获取 ttwid");
+        println!("💡 [get_live_html] 尝试从保存的 Cookie 文件中读取...");
+
+        // 尝试从保存的 Cookie 文件中读取 ttwid
+        if let Ok(cookie_path) = crate::utils::cookie_store::CookieStore::get_default_path() {
+            if cookie_path.exists() {
+                match crate::utils::cookie_store::CookieStore::load_from_file(&cookie_path) {
+                    Ok(store) => {
+                        for cookie in &store.cookies {
+                            if cookie.name == "ttwid" {
+                                extracted_ttwid = cookie.value.clone();
+                                println!("  ✅ 从 Cookie 文件提取 ttwid: {}...", &extracted_ttwid[..20.min(extracted_ttwid.len())]);
+                                break;
+                            }
+                        }
+
+                        if extracted_ttwid.is_empty() {
+                            println!("  ⚠️  Cookie 文件中没有 ttwid");
+                        }
+                    }
+                    Err(e) => {
+                        println!("  ⚠️  读取 Cookie 文件失败: {}", e);
+                    }
+                }
+            } else {
+                println!("  ℹ️  Cookie 文件不存在（用户可能未登录过）");
+            }
+        }
+    }
+
+    if extracted_ttwid.is_empty() {
+        println!("⚠️  [get_live_html] 所有方式都未能获取 ttwid");
+        println!("💡 提示：WebSocket 连接可能需要 ttwid 才能成功");
+        println!("💡 建议：使用登录功能登录一次，保存 Cookie 后再试");
     }
 
     // ========== 步骤2: 打开浏览器窗口提取数据 ==========
