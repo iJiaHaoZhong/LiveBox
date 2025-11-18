@@ -69,6 +69,16 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                             match handle.get_window(window_label) {
                                 None => {
                                     println!("✅ 登录窗口已关闭");
+
+                                    // 恢复主窗口
+                                    for (label, win) in handle.windows() {
+                                        if label != "douyinLogin" {
+                                            println!("🔄 恢复主窗口: {}", label);
+                                            let _ = win.show();
+                                            let _ = win.set_focus();
+                                        }
+                                    }
+
                                     break;
                                 }
                                 Some(_) => {
@@ -130,6 +140,16 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                             if attempts >= max_attempts {
                                 println!("⏱ 等待超时（120秒），未检测到登录");
                                 let _ = window.close();
+
+                                // 恢复主窗口
+                                for (label, win) in handle.windows() {
+                                    if label != "douyinLogin" {
+                                        println!("🔄 恢复主窗口: {}", label);
+                                        let _ = win.show();
+                                        let _ = win.set_focus();
+                                    }
+                                }
+
                                 return Err("等待登录超时，请重试".into());
                             }
 
@@ -140,9 +160,29 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                             }
                         }
 
+                        // 恢复主窗口（如果被隐藏了）
+                        // 遍历所有窗口，找到非登录窗口并显示
+                        for (label, win) in handle.windows() {
+                            if label != "douyinLogin" {
+                                println!("🔄 恢复主窗口: {}", label);
+                                let _ = win.show();
+                                let _ = win.set_focus();
+                            }
+                        }
+
                         // 检查是否成功获取到 Cookie
                         if cookie_string.is_none() {
                             println!("⚠️  窗口已关闭，但未检测到 Cookie");
+
+                            // 恢复主窗口
+                            for (label, win) in handle.windows() {
+                                if label != "douyinLogin" {
+                                    println!("🔄 恢复主窗口: {}", label);
+                                    let _ = win.show();
+                                    let _ = win.set_focus();
+                                }
+                            }
+
                             return Err("未检测到登录 Cookie，请重试".into());
                         }
 
@@ -172,6 +212,16 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                     }
                     Err(window_err) => {
                         eprintln!("❌ 打开登录窗口失败: {}", window_err);
+
+                        // 恢复主窗口
+                        for (label, win) in handle.windows() {
+                            if label != "douyinLogin" {
+                                println!("🔄 恢复主窗口: {}", label);
+                                let _ = win.show();
+                                let _ = win.set_focus();
+                            }
+                        }
+
                         Err(format!("无法打开登录窗口: {}", window_err))
                     }
                 }

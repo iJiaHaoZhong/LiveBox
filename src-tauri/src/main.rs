@@ -20,7 +20,7 @@ fn main() {
             command::cookie::open_login_page
         ])
         .on_window_event(|event| {
-            // 防止关闭主窗口时退出应用（如果还有其他窗口在运行）
+            // 当主窗口被关闭时，如果登录窗口在运行，则隐藏主窗口而不是退出
             if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
                 let window = event.window();
 
@@ -28,8 +28,11 @@ fn main() {
                 if window.label() != "douyinLogin" {
                     if let Some(_login_window) = window.app_handle().get_window("douyinLogin") {
                         println!("⚠️  检测到关闭主窗口的请求，但登录窗口正在运行");
-                        println!("💡 请等待登录完成，或关闭登录窗口后再关闭主窗口");
+                        println!("💡 隐藏主窗口，等待登录完成后自动恢复");
+
+                        // 阻止关闭并隐藏窗口
                         api.prevent_close();
+                        let _ = window.hide();
                     }
                 }
             }
