@@ -19,7 +19,10 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
     match result {
         Ok(info) => Ok(info),
         Err(e) => {
+            // 立即转换为 String，避免 Send 问题
             let error_msg = e.to_string();
+            // 释放 e，避免跨越 await 点
+            drop(e);
 
             // 检查是否为 Access Denied 错误
             if error_msg == ERROR_ACCESS_DENIED {
