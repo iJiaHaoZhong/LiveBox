@@ -13,12 +13,9 @@ pub struct DouYinReq {
 // 为抖音请求的结构体添加方法
 impl DouYinReq {
     pub fn new(url: &str) -> Self {
+        // 配置 HTTP 客户端以模拟浏览器行为
         let client = Client::builder()
             .cookie_store(true)
-            .gzip(true) // 启用 gzip 压缩
-            .brotli(true) // 启用 brotli 压缩
-            .deflate(true) // 启用 deflate 压缩
-            .http2_adaptive_window(true) // HTTP/2 自适应窗口
             .build()
             .unwrap();
         DouYinReq {
