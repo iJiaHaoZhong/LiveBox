@@ -150,23 +150,26 @@ impl DouYinReq {
             }
         }
 
-        // 检测是否需要登录（Access Denied、验证码页面等）
+        // 检测是否需要登录或验证码
         let mut deny_reason = None;
-        if body.contains("Access Denied") {
-            deny_reason = Some("包含 'Access Denied' 文字");
+        let mut is_captcha = false;
+
+        // 优先检测验证码页面（这些需要用户交互）
+        if body.contains("验证码中间页") || body.contains("middle_page_loading") {
+            deny_reason = Some("包含 '验证码中间页' 或 'middle_page_loading' - 需要用户完成验证码");
+            is_captcha = true;
+        } else if body.contains("captcha") {
+            deny_reason = Some("包含 'captcha' 验证码标识 - 需要用户完成验证码");
+            is_captcha = true;
+        } else if body.contains("Access Denied") {
+            deny_reason = Some("包含 'Access Denied' 文字 - 访问被拒绝");
         } else if body.contains("X-TT-System-Error") {
             deny_reason = Some("包含 'X-TT-System-Error' 系统错误标识");
-        } else if body.contains("验证码中间页") {
-            deny_reason = Some("包含 '验证码中间页' 文字");
-        } else if body.contains("captcha") {
-            deny_reason = Some("包含 'captcha' 验证码标识");
-        } else if body.contains("middle_page_loading") {
-            deny_reason = Some("包含 'middle_page_loading' 中间页标识");
         }
 
         if let Some(reason) = deny_reason {
             println!("\n❌ ========== 访问被拒绝 ==========");
-            println!("❌ 检测到需要登录或验证");
+            println!("❌ 检测到需要{}验证", if is_captcha { "验证码" } else { "登录或" });
             println!("📍 拒绝原因: {}", reason);
             println!("🍪 是否使用了保存的 Cookie: {}", if using_saved_cookies { "是" } else { "否" });
             if using_saved_cookies {
@@ -187,9 +190,16 @@ impl DouYinReq {
                 }
             }
             println!("🌐 请求的 URL: {}", self.room_url);
-            println!("💡 提示: 后端将根据 Cookie 文件是否存在决定是否打开登录窗口");
-            println!("======================================\n");
-            return Err(crate::command::model::ERROR_ACCESS_DENIED.into());
+
+            if is_captcha {
+                println!("💡 提示: 需要打开浏览器窗口让用户完成验证码验证");
+                println!("======================================\n");
+                return Err(crate::command::model::ERROR_CAPTCHA_REQUIRED.into());
+            } else {
+                println!("💡 提示: 后端将根据 Cookie 文件是否存在决定是否打开登录窗口");
+                println!("======================================\n");
+                return Err(crate::command::model::ERROR_ACCESS_DENIED.into());
+            }
         }
 
         // println!("获取的直播间HTML内容是：{}", body);

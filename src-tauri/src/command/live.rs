@@ -1,4 +1,4 @@
-use crate::command::model::{LiveInfo, ERROR_ACCESS_DENIED};
+use crate::command::model::{LiveInfo, ERROR_ACCESS_DENIED, ERROR_CAPTCHA_REQUIRED};
 use crate::command::runner::DouYinReq;
 use tauri::{AppHandle, Manager};
 
@@ -30,8 +30,138 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
     match result_string {
         Ok(info) => Ok(info),
         Err(error_msg) => {
+            // 检查是否需要验证码
+            if error_msg == ERROR_CAPTCHA_REQUIRED {
+                println!("🔐 [get_live_html] 检测到需要验证码，打开浏览器窗口让用户完成验证...");
+
+                let window_label = "douyinCaptcha";
+
+                // 如果窗口已存在，先关闭
+                if let Some(existing_window) = handle.get_window(window_label) {
+                    let _ = existing_window.close();
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                }
+
+                // 创建新窗口，直接加载直播间 URL（会显示验证码页面）
+                match tauri::WindowBuilder::new(
+                    &handle,
+                    window_label,
+                    tauri::WindowUrl::External(url.parse().unwrap()),
+                )
+                .title("验证码验证 - 完成后会自动保存 Cookie")
+                .inner_size(1200.0, 800.0)
+                .center()
+                .initialization_script(include_str!("../inject/cookie_extractor.js"))
+                .build()
+                {
+                    Ok(window) => {
+                        println!("✅ [get_live_html] 验证码窗口已打开");
+                        println!("⏳ [get_live_html] 等待用户完成验证码...");
+
+                        // 等待用户完成验证码并提取新 Cookie
+                        let mut attempts = 0;
+                        let max_attempts = 600; // 5分钟 (每次检查间隔 500ms)
+                        let mut cookie_string: Option<String> = None;
+
+                        loop {
+                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+                            // 检查窗口是否还存在
+                            match handle.get_window(window_label) {
+                                None => {
+                                    println!("✅ [get_live_html] 验证码窗口已关闭");
+                                    break;
+                                }
+                                Some(_) => {}
+                            }
+
+                            // 读取 URL hash 中的 Cookie
+                            if cookie_string.is_none() {
+                                if attempts % 10 == 0 && attempts > 0 {
+                                    println!("🔍 等待验证码完成... (第 {} 次检查)", attempts);
+                                }
+
+                                let current_url = window.url();
+                                let url_str = current_url.to_string();
+
+                                if url_str.contains("#__COOKIES__=") {
+                                    if let Some(hash_start) = url_str.find("#__COOKIES__=") {
+                                        let cookie_data = &url_str[hash_start + 13..];
+
+                                        match urlencoding::decode(cookie_data) {
+                                            Ok(decoded_cookies) => {
+                                                let cookies = decoded_cookies.to_string();
+                                                cookie_string = Some(cookies.clone());
+
+                                                println!("🍪 检测到验证后的 Cookie！");
+                                                println!("📝 Cookie 长度: {} 字符", cookies.len());
+
+                                                // 保存新的 Cookie
+                                                match crate::command::cookie::save_cookies(cookies).await {
+                                                    Ok(msg) => println!("✅ {}", msg),
+                                                    Err(err) => eprintln!("❌ Cookie 保存失败: {}", err),
+                                                }
+
+                                                println!("🔒 关闭验证码窗口...");
+                                                let _ = window.close();
+                                                break;
+                                            }
+                                            Err(e) => {
+                                                eprintln!("❌ URL 解码失败: {}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            attempts += 1;
+                            if attempts >= max_attempts {
+                                println!("⏱ 等待超时（5分钟），验证码未完成");
+                                let _ = window.close();
+                                break;
+                            }
+
+                            if attempts % 60 == 0 {
+                                println!("⏳ 已等待 {} 秒，请尽快完成验证码...", attempts / 2);
+                            }
+                        }
+
+                        // 恢复主窗口
+                        for (label, win) in handle.windows() {
+                            if label != window_label && label != "daemon" {
+                                let _ = win.show();
+                                let _ = win.set_focus();
+                            }
+                        }
+
+                        // 如果获取到了新的 Cookie，重试请求
+                        if cookie_string.is_some() {
+                            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                            println!("🔄 使用新 Cookie 重试获取直播间信息...");
+
+                            let mut retry_req = DouYinReq::new(url);
+                            let retry_result = retry_req.get_room_info().await;
+
+                            match retry_result {
+                                Ok(info) => {
+                                    println!("✅ 验证码验证成功，成功获取直播间信息！");
+                                    return Ok(info);
+                                }
+                                Err(retry_error) => {
+                                    return Err(format!("验证码验证后仍然失败: {}", retry_error));
+                                }
+                            }
+                        } else {
+                            return Err("验证码验证超时或被取消".into());
+                        }
+                    }
+                    Err(e) => {
+                        return Err(format!("无法打开验证码窗口: {}", e));
+                    }
+                }
+            }
             // 检查是否为 Access Denied 错误
-            if error_msg == ERROR_ACCESS_DENIED {
+            else if error_msg == ERROR_ACCESS_DENIED {
                 // 在打开登录窗口之前，先检查是否已有 Cookie 文件
                 let has_cookie_file = if let Ok(cookie_path) = crate::utils::cookie_store::CookieStore::get_default_path() {
                     let exists = cookie_path.exists();

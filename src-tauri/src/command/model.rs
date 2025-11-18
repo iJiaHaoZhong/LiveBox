@@ -8,3 +8,4 @@ pub struct LiveInfo {
 
 // 错误类型常量
 pub const ERROR_ACCESS_DENIED: &str = "ACCESS_DENIED_NEED_LOGIN";
+pub const ERROR_CAPTCHA_REQUIRED: &str = "CAPTCHA_REQUIRED";

@@ -29,11 +29,25 @@
         const hasOdinToken = cookies.includes('odin_tt=');
         const hasSignature = cookies.includes('__ac_signature=');
 
-        // 如果检测到任何一个关键 Cookie，说明可能已登录
-        if ((hasSessionId || hasPassportToken || hasOdinToken || hasSignature) && !loginDetected) {
+        // 检查页面是否已经不是验证码页面了（验证码完成后会跳转）
+        const currentUrl = window.location.href;
+        const isOnCaptchaPage = document.title.includes('验证码') ||
+                               document.body.innerHTML.includes('验证码中间页') ||
+                               document.body.innerHTML.includes('middle_page_loading');
+
+        // 检查是否已经成功进入正常页面（验证码验证成功）
+        const isOnNormalPage = (currentUrl.includes('live.douyin.com') ||
+                               currentUrl.includes('www.douyin.com')) &&
+                              !isOnCaptchaPage &&
+                              cookies.length > 50; // 有一定数量的 Cookie
+
+        // 如果检测到任何一个关键 Cookie，或者验证码已完成，说明可能已登录
+        if ((hasSessionId || hasPassportToken || hasOdinToken || hasSignature || isOnNormalPage) && !loginDetected) {
             loginDetected = true;
-            console.log('✅ 检测到登录！');
+            console.log('✅ 检测到登录或验证码验证完成！');
             console.log('🍪 Cookie 数量:', cookies.split(';').length);
+            console.log('📍 当前页面:', currentUrl);
+            console.log('🔍 是否在验证码页面:', isOnCaptchaPage);
 
             // 自动保存 Cookie
             saveCookies(cookies);
@@ -42,7 +56,8 @@
             clearInterval(loginCheckInterval);
         } else if (checkCount % 10 === 0) {
             // 每 10 秒输出一次检查状态
-            console.log(`⏳ 等待登录... (${checkCount}秒)`);
+            const statusMsg = isOnCaptchaPage ? '等待验证码验证...' : '等待登录...';
+            console.log(`⏳ ${statusMsg} (${checkCount}秒)`);
         }
     }
 
