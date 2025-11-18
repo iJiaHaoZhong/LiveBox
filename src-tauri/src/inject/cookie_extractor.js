@@ -35,27 +35,41 @@
         // 只有在【不在验证码页面】时才检测Cookie
         // 这样可以避免提取到还没有通过验证的旧Cookie
         if (!isOnCaptchaPage && !loginDetected) {
+            // 检查当前 URL 是否为有效的抖音域名（必须是实际的抖音页面，不是中间跳转页）
+            const isOnDouyinDomain = currentUrl.includes('live.douyin.com') ||
+                                     currentUrl.includes('www.douyin.com');
+
             // 检查是否有登录相关的 Cookie
             const hasSessionId = cookies.includes('sessionid=');
             const hasPassportToken = cookies.includes('passport_auth_token=');
             const hasOdinToken = cookies.includes('odin_tt=');
             const hasSignature = cookies.includes('__ac_signature=');
 
-            // 检查是否已经成功进入正常页面
             const cookieCount = cookies.split(';').length;
-            const isOnNormalPage = (currentUrl.includes('live.douyin.com') ||
-                                   currentUrl.includes('www.douyin.com')) &&
-                                  cookies.length > 50;
 
-            // 如果已经离开验证码页面，并且有足够的Cookie（>20个），说明页面已正常加载
-            // 降低要求：只要不在验证码页面且有20+个Cookie就认为成功
-            if ((hasSessionId || hasPassportToken || hasOdinToken || hasSignature || isOnNormalPage || cookieCount >= 20)) {
+            // 检查页面内容是否包含实际的直播间元素（不是中间页或错误页）
+            const hasLiveRoomContent = pageHtml.includes('live_room') ||
+                                      pageHtml.includes('room_data') ||
+                                      pageHtml.includes('webcast');
+
+            // 严格条件：必须满足以下所有条件才提取 Cookie
+            // 1. 在抖音域名上
+            // 2. 不在验证码页面
+            // 3. 有一定数量的 Cookie (>=20)
+            // 4. 页面包含直播间相关内容 OR 有关键验证 Cookie
+            const shouldExtractCookies = isOnDouyinDomain &&
+                                        cookieCount >= 20 &&
+                                        (hasLiveRoomContent || hasSessionId || hasPassportToken || hasOdinToken || hasSignature);
+
+            if (shouldExtractCookies) {
                 loginDetected = true;
                 console.log('✅ 检测到验证码验证完成或登录成功！');
                 console.log('🍪 Cookie 数量:', cookieCount);
                 console.log('📍 当前页面:', currentUrl);
                 console.log('📝 页面标题:', pageTitle);
                 console.log('🔍 已确认不在验证码页面');
+                console.log('🔍 页面包含直播间内容:', hasLiveRoomContent);
+                console.log('🔍 有关键验证 Cookie:', hasSessionId || hasPassportToken || hasOdinToken || hasSignature);
                 console.log('✅ Cookie 条件满足，开始保存');
 
                 // 自动保存 Cookie
@@ -64,7 +78,11 @@
                 // 停止检查
                 clearInterval(loginCheckInterval);
             } else if (checkCount % 10 === 0) {
-                console.log(`⏳ 已离开验证码页面，但Cookie不足 (${cookieCount}个)，继续等待... (${checkCount}秒)`);
+                console.log(`⏳ 已离开验证码页面，但条件未满足，继续等待... (${checkCount}秒)`);
+                console.log(`   - 在抖音域名: ${isOnDouyinDomain}`);
+                console.log(`   - Cookie 数量: ${cookieCount}`);
+                console.log(`   - 有直播间内容: ${hasLiveRoomContent}`);
+                console.log(`   - 有验证 Cookie: ${hasSessionId || hasPassportToken || hasOdinToken || hasSignature}`);
             }
         } else if (checkCount % 10 === 0) {
             // 每 10 秒输出一次检查状态
@@ -282,30 +300,6 @@
 
     console.log('🚀 开始监听登录状态...');
 
-    // 额外添加：3秒后如果发现页面没有验证码，立即提取Cookie
-    setTimeout(() => {
-        const currentUrl = window.location.href;
-        const pageTitle = document.title || '';
-        const pageHtml = document.body ? document.body.innerHTML : '';
-
-        const isOnCaptchaPage = pageTitle.includes('验证码') ||
-                               pageHtml.includes('验证码中间页') ||
-                               pageHtml.includes('middle_page_loading') ||
-                               pageHtml.includes('TTGCaptcha');
-
-        if (!isOnCaptchaPage && !loginDetected) {
-            console.log('🎯 检测到页面加载完成，且没有验证码页面');
-            console.log('📍 当前页面:', currentUrl);
-            console.log('📝 页面标题:', pageTitle);
-            console.log('🔍 页面中是否有验证码: false');
-            console.log('💡 将在下一次检查时提取 Cookie');
-
-            // 立即触发一次检查
-            checkLoginStatus();
-        } else if (isOnCaptchaPage) {
-            console.log('✋ 检测到验证码页面，等待用户完成验证');
-            console.log('📍 当前页面:', currentUrl);
-            console.log('📝 页面标题:', pageTitle);
-        }
-    }, 3000);
+    // 移除 3 秒延迟检查，避免过早提取 Cookie
+    // 等待页面完全加载并导航到正确的直播间页面后，定时器会自动检测并提取
 })();
