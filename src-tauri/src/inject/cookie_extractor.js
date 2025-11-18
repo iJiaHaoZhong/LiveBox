@@ -334,6 +334,20 @@
     console.log('🚀 开始监听登录状态...');
     console.log('⏳ 等待页面加载完成（1秒后开始检测）...');
 
+    // 触发验证码检测：主动刷新页面强制重新验证
+    // 浏览器直接访问可能绕过验证码，但刷新后会触发验证
+    // 使用 sessionStorage 标记，只刷新一次
+    const hasRefreshed = sessionStorage.getItem('captcha_refreshed');
+    if (!hasRefreshed) {
+        setTimeout(() => {
+            console.log('🔄 主动刷新页面以触发验证码检测...');
+            sessionStorage.setItem('captcha_refreshed', 'true');
+            window.location.reload();
+        }, 2000);
+    } else {
+        console.log('✓ 页面已刷新过，开始正常检测');
+    }
+
     // 每秒检查一次登录状态（不立即执行，给页面加载时间）
     const loginCheckInterval = setInterval(checkLoginStatus, 1000);
 
