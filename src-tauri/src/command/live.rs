@@ -57,7 +57,7 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                     println!("  ✓ 直播间页面访问成功，状态: {}", response.status());
 
                     // 打印所有收到的 Cookie（调试用）
-                    let cookies = response.cookies();
+                    let cookies: Vec<_> = response.cookies().collect();
                     let cookie_names: Vec<String> = cookies.iter().map(|c| c.name().to_string()).collect();
                     if cookie_names.is_empty() {
                         println!("  📋 响应中没有 Set-Cookie 头");
@@ -66,7 +66,7 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                     }
 
                     // 尝试从收到的 Cookie 中提取 ttwid
-                    for cookie in response.cookies() {
+                    for cookie in cookies {
                         if cookie.name() == "ttwid" {
                             extracted_ttwid = cookie.value().to_string();
                             println!("  ✅ 成功提取 ttwid: {}...", &extracted_ttwid[..20.min(extracted_ttwid.len())]);
