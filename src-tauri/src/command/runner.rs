@@ -175,11 +175,14 @@ impl DouYinReq {
             Some(captures) => match captures.get(1) {
                 Some(matched) => matched.as_str(),
                 None => {
-                    return Err("无法提取房间信息 (group 1 不存在)".into());
+                    println!("❌ 无法提取房间信息，可能需要登录");
+                    return Err(crate::command::model::ERROR_ACCESS_DENIED.into());
                 }
             },
             None => {
-                return Err("无法匹配房间信息，可能直播间地址无效或页面结构已变化".into());
+                println!("❌ 无法匹配房间信息，可能需要登录或页面结构已变化");
+                println!("💡 提示: 后端将自动打开登录窗口");
+                return Err(crate::command::model::ERROR_ACCESS_DENIED.into());
             }
         };
         // 替换里面的双引号,方便json解析
