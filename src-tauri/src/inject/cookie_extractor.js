@@ -27,6 +27,23 @@
         const pageTitle = document.title || '';
         const pageHtml = document.body ? document.body.innerHTML : '';
 
+        // 页面加载保护：确保页面已经加载完成，不是空白页或加载中
+        const pageHtmlLength = pageHtml.length;
+        const isPageLoaded = pageHtmlLength > 1000; // 至少1000字符，说明页面有实际内容
+
+        // 排除 about:blank 等非目标页面
+        const isValidUrl = currentUrl.includes('douyin.com') && !currentUrl.includes('about:blank');
+
+        if (!isValidUrl || !isPageLoaded) {
+            if (checkCount % 10 === 0) {
+                console.log(`⏳ 页面正在加载... (${checkCount}秒)`);
+                console.log(`   - 当前 URL: ${currentUrl}`);
+                console.log(`   - 页面长度: ${pageHtmlLength} 字符`);
+                console.log(`   - URL 有效: ${isValidUrl}, 页面已加载: ${isPageLoaded}`);
+            }
+            return; // 页面未加载完成，直接返回，等待下次检查
+        }
+
         const isOnCaptchaPage = pageTitle.includes('验证码') ||
                                pageHtml.includes('验证码中间页') ||
                                pageHtml.includes('middle_page_loading') ||
@@ -292,13 +309,11 @@
     // 显示初始提示
     showInitialMessage();
 
-    // 每秒检查一次登录状态
-    const loginCheckInterval = setInterval(checkLoginStatus, 1000);
-
-    // 首次立即检查（可能用户已经登录）
-    checkLoginStatus();
-
     console.log('🚀 开始监听登录状态...');
+    console.log('⏳ 等待页面加载完成（1秒后开始检测）...');
+
+    // 每秒检查一次登录状态（不立即执行，给页面加载时间）
+    const loginCheckInterval = setInterval(checkLoginStatus, 1000);
 
     // 移除 3 秒延迟检查，避免过早提取 Cookie
     // 等待页面完全加载并导航到正确的直播间页面后，定时器会自动检测并提取
