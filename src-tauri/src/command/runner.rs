@@ -15,7 +15,6 @@ impl DouYinReq {
     pub fn new(url: &str) -> Self {
         let client = Client::builder()
             .cookie_store(true)
-            .use_rustls_tls() // 使用 rustls TLS 实现（模拟现代浏览器）
             .gzip(true) // 启用 gzip 压缩
             .brotli(true) // 启用 brotli 压缩
             .deflate(true) // 启用 deflate 压缩
