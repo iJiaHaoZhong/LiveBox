@@ -98,51 +98,59 @@ pub async fn get_live_html(url: &str, handle: AppHandle) -> Result<LiveInfo, Str
                                 }
                             }
 
-                            // 尝试从窗口标题读取 Cookie
+                            // 使用 evaluate_script 读取 JavaScript 全局变量
                             if cookie_string.is_none() {
-                                match window.title() {
-                                    Ok(title) => {
-                                        // 每 5 秒打印一次标题（用于调试）
-                                        if attempts % 10 == 0 {
-                                            let title_preview = if title.len() > 50 {
-                                                format!("{}...", &title[..50])
-                                            } else {
-                                                title.clone()
-                                            };
-                                            println!("🔍 当前窗口标题: {}", title_preview);
+                                // 每 5 秒打印一次检查状态（用于调试）
+                                if attempts % 10 == 0 && attempts > 0 {
+                                    println!("🔍 检查 Cookie 状态 (第 {} 次)", attempts);
+                                }
+
+                                // 检查 JavaScript 是否设置了 Cookie
+                                let check_script = r#"
+                                    (function() {
+                                        if (window.__DOUYIN_COOKIES_READY__ === true && window.__DOUYIN_COOKIES__) {
+                                            return window.__DOUYIN_COOKIES__;
                                         }
+                                        return null;
+                                    })()
+                                "#;
 
-                                        if title.starts_with("__COOKIES_READY__|") {
-                                            // 提取 Cookie 字符串
-                                            let cookies = title.trim_start_matches("__COOKIES_READY__|");
-                                            cookie_string = Some(cookies.to_string());
+                                match window.eval(check_script) {
+                                    Ok(result) => {
+                                        // 解析返回的 JSON 值
+                                        if let Ok(result_str) = serde_json::from_str::<serde_json::Value>(&result) {
+                                            if !result_str.is_null() {
+                                                if let Some(cookies) = result_str.as_str() {
+                                                    cookie_string = Some(cookies.to_string());
 
-                                            println!("🍪 检测到 Cookie！");
-                                            println!("📝 Cookie 长度: {} 字符", cookies.len());
+                                                    println!("🍪 检测到 Cookie！");
+                                                    println!("📝 Cookie 长度: {} 字符", cookies.len());
 
-                                            // 保存 Cookie
-                                            match crate::command::cookie::save_cookies(cookies.to_string()).await {
-                                                Ok(msg) => {
-                                                    println!("✅ {}", msg);
-                                                }
-                                                Err(err) => {
-                                                    eprintln!("❌ Cookie 保存失败: {}", err);
+                                                    // 保存 Cookie
+                                                    match crate::command::cookie::save_cookies(cookies.to_string()).await {
+                                                        Ok(msg) => {
+                                                            println!("✅ {}", msg);
+                                                        }
+                                                        Err(err) => {
+                                                            eprintln!("❌ Cookie 保存失败: {}", err);
+                                                        }
+                                                    }
+
+                                                    // 关闭窗口
+                                                    println!("🔒 尝试关闭登录窗口...");
+                                                    match window.close() {
+                                                        Ok(_) => println!("✅ 窗口关闭成功"),
+                                                        Err(e) => eprintln!("❌ 窗口关闭失败: {}", e),
+                                                    }
+                                                    break;
                                                 }
                                             }
-
-                                            // 关闭窗口
-                                            println!("🔒 尝试关闭登录窗口...");
-                                            match window.close() {
-                                                Ok(_) => println!("✅ 窗口关闭成功"),
-                                                Err(e) => eprintln!("❌ 窗口关闭失败: {}", e),
-                                            }
-                                            break;
                                         }
                                     }
                                     Err(e) => {
-                                        // 每 5 秒打印一次无法获取标题的错误
-                                        if attempts % 10 == 0 {
-                                            println!("⚠️  无法获取窗口标题: {}", e);
+                                        // 每 10 秒打印一次错误（用于调试）
+                                        if attempts % 20 == 0 && attempts > 0 {
+                                            println!("⚠️  evaluate_script 错误: {}", e);
                                         }
                                     }
                                 }

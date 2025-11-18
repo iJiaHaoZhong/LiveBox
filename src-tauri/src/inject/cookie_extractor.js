@@ -62,35 +62,30 @@
                 return;
             }
 
-            // 将 Cookie 通过多种方式传递给 Rust 端
-            // 方法1: 存储到全局变量
+            // 存储到全局变量供 Rust 端通过 evaluate_script 读取
             window.__DOUYIN_COOKIES__ = cookieString;
             window.__DOUYIN_COOKIES_READY__ = true;
 
-            // 方法2: 通过窗口标题传递（使用特殊前缀）
-            const originalTitle = document.title;
-            document.title = '__COOKIES_READY__|' + cookieString;
-
             console.log('✅ Cookie 已准备好，正在传递给后端...');
             console.log('🔍 Cookie 数量:', cookieString.split(';').length);
+            console.log('📝 全局变量已设置: window.__DOUYIN_COOKIES_READY__ = true');
+
+            // 定期检查全局变量是否还存在（确保没有被覆盖）
+            const checkInterval = setInterval(() => {
+                if (window.__DOUYIN_COOKIES_READY__ !== true) {
+                    console.warn('⚠️  全局变量被覆盖，重新设置...');
+                    window.__DOUYIN_COOKIES__ = cookieString;
+                    window.__DOUYIN_COOKIES_READY__ = true;
+                }
+            }, 100); // 每100ms检查一次
+
+            // 3秒后停止检查
+            setTimeout(() => clearInterval(checkInterval), 5000);
 
             // 显示成功提示
             showSuccessMessage();
 
-            // 3秒后自动关闭窗口（备用机制，如果 Rust 没有关闭的话）
-            setTimeout(() => {
-                console.log('🔒 3秒已过，尝试关闭窗口...');
-                try {
-                    window.close();
-                    console.log('✅ 窗口关闭请求已发送');
-                } catch (e) {
-                    console.error('❌ 无法关闭窗口:', e);
-                    // 如果无法关闭，至少恢复标题
-                    if (document.title.startsWith('__COOKIES_READY__|')) {
-                        document.title = originalTitle;
-                    }
-                }
-            }, 3000);
+            console.log('⏳ 等待 Rust 端读取 Cookie 并关闭窗口...');
 
         } catch (error) {
             console.error('❌ Cookie 处理失败:', error);
@@ -121,7 +116,7 @@
                 <span style="font-size: 24px;">✅</span>
                 <div>
                     <div>登录成功！Cookie 已自动保存</div>
-                    <div style="font-size: 12px; opacity: 0.9; margin-top: 4px;">窗口将在 3 秒后自动关闭</div>
+                    <div style="font-size: 12px; opacity: 0.9; margin-top: 4px;">窗口即将自动关闭</div>
                 </div>
             </div>
         `;
