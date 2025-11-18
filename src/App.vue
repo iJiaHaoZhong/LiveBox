@@ -290,9 +290,13 @@ const clearLivex = () => {
 
 // 创建websokcet
 const creatSokcet = async (roomId: string, uniqueId: string, ttwid: string) => {
-    // console.log('创建连接', roomId, uniqueId)
+    console.log('🔌 [WebSocket] 开始创建 WebSocket 连接...')
+    console.log('  roomId:', roomId)
+    console.log('  uniqueId:', uniqueId)
+    console.log('  ttwid:', ttwid ? (ttwid.substring(0, 20) + '...') : '(空)')
+
     let sign = window.creatSignature(roomId, uniqueId)
-    // console.log('sign----', sign)
+    console.log('  signature:', sign ? '已生成' : '生成失败')
     // 组装参数
     let socketUrl = `wss://webcast5-ws-web-lf.douyin.com/webcast/im/push/v2/?room_id=${roomId}&compress=gzip&version_code=180800&webcast_sdk_version=1.0.14-beta.0&live_id=1&did_rule=3&user_unique_id=${uniqueId}&identity=audience&signature=${sign}&aid=6383&device_platform=web&browser_language=zh-CN&browser_platform=Win32&browser_name=Mozilla&browser_version=5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0.0.0+Safari%2F537.36+Edg%2F126.0.0.0`
     // header
@@ -393,10 +397,10 @@ const pushMsg = (msg: any) => {
 
 // 收到websocket消息回调
 const onMessage = (msg: any) => {
-    // console.log('收到消息', msg)
+    console.log('📨 [WebSocket] 收到消息，数据长度:', msg.data?.length || 0)
     // 解析消息
     const decodeMsg = douyin.PushFrame.decode(msg.data)
-    // console.log('decodeMsg--', decodeMsg)
+    console.log('📨 [WebSocket] 消息类型:', decodeMsg.payloadType)
     // 滚动盒子到底部
     if (liveMsg.value) {
         const msgDom: HTMLElement | null = document.getElementById('liveMsg')
@@ -424,7 +428,9 @@ const onMessage = (msg: any) => {
 
 // 遍历消息数组，拿到具体的消息
 const handleMessage = (messageList: douyin.Message) => {
+    console.log('📨 [WebSocket] 消息列表长度:', messageList.length)
     messageList.forEach((msg) => {
+        console.log('📨 [WebSocket] 消息方法:', msg.method)
         // 判断消息类型
         switch (msg.method) {
             // 反对分数
@@ -484,14 +490,19 @@ const handleMessage = (messageList: douyin.Message) => {
 const decodeChat = (data) => {
     // 校验消息
     const chatMsg = douyin.ChatMessage.decode(data)
-    // console.log('chatMsg-----', chatMsg)
+    console.log('💬 [聊天消息] 用户:', chatMsg.user?.nickName, '内容:', chatMsg.content)
     const { common, user, content } = chatMsg
     const message = {
         id: common.msgId,
         name: user.nickName,
         msg: content,
     }
-    checkList.value.includes('chat') && messageList.value.push(message)
+    if (checkList.value.includes('chat')) {
+        messageList.value.push(message)
+        console.log('💬 [聊天消息] 已添加到消息列表，当前列表长度:', messageList.value.length)
+    } else {
+        console.log('💬 [聊天消息] 聊天类型未勾选，不显示消息')
+    }
 
     // 推送到配置的 URL
     if (pushUrl.value && checkList.value.includes('chat')) {

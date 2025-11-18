@@ -40,6 +40,10 @@ class SocketCli {
     // 初始化ws对象
     async init() {
         try {
+            console.log('🔌 [WebSocket] 正在连接到服务器...')
+            console.log('🔌 [WebSocket] URL:', this.url.substring(0, 100) + '...')
+            console.log('🔌 [WebSocket] Headers:', JSON.stringify(this.opts.headers))
+
             this.ws = await WebSocket.connect(this.url, this.opts).then((w) => {
                 // 成功建立连接
                 this.onOpen()
@@ -51,13 +55,14 @@ class SocketCli {
             this.ws?.addListener(this.callBack)
         } catch (e) {
             // 发送错误信息
-            console.log('WebSocket connection failed:', e)
+            console.error('❌ [WebSocket] 连接失败:', e)
+            console.error('❌ [WebSocket] 错误详情:', JSON.stringify(e))
         }
     }
 
     // websocket链接建立
     onOpen() {
-        console.log('WebSocket opened:')
+        console.log('✅ [WebSocket] 连接已建立！')
     }
 
     // 发送心跳
