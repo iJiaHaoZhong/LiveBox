@@ -108,10 +108,15 @@ impl DouYinReq {
         // 获取cookie里面的ttwid
         let body = response.text().await?;
 
-        // 检测是否为 Access Denied 错误
-        if body.contains("Access Denied") || body.contains("X-TT-System-Error") {
-            println!("❌ 检测到 Access Denied 错误，需要登录");
-            println!("💡 提示: 请调用 open_login_page 命令登录抖音账号");
+        // 检测是否需要登录（Access Denied、验证码页面等）
+        if body.contains("Access Denied")
+            || body.contains("X-TT-System-Error")
+            || body.contains("验证码中间页")
+            || body.contains("captcha")
+            || body.contains("middle_page_loading") {
+
+            println!("❌ 检测到需要登录（Access Denied 或验证码页面）");
+            println!("💡 提示: 后端将自动打开登录窗口");
             return Err(crate::command::model::ERROR_ACCESS_DENIED.into());
         }
 
