@@ -278,4 +278,31 @@
     checkLoginStatus();
 
     console.log('🚀 开始监听登录状态...');
+
+    // 额外添加：3秒后如果发现页面没有验证码，立即提取Cookie
+    setTimeout(() => {
+        const currentUrl = window.location.href;
+        const pageTitle = document.title || '';
+        const pageHtml = document.body ? document.body.innerHTML : '';
+
+        const isOnCaptchaPage = pageTitle.includes('验证码') ||
+                               pageHtml.includes('验证码中间页') ||
+                               pageHtml.includes('middle_page_loading') ||
+                               pageHtml.includes('TTGCaptcha');
+
+        if (!isOnCaptchaPage && !loginDetected) {
+            console.log('🎯 检测到页面加载完成，且没有验证码页面');
+            console.log('📍 当前页面:', currentUrl);
+            console.log('📝 页面标题:', pageTitle);
+            console.log('🔍 页面中是否有验证码: false');
+            console.log('💡 将在下一次检查时提取 Cookie');
+
+            // 立即触发一次检查
+            checkLoginStatus();
+        } else if (isOnCaptchaPage) {
+            console.log('✋ 检测到验证码页面，等待用户完成验证');
+            console.log('📍 当前页面:', currentUrl);
+            console.log('📝 页面标题:', pageTitle);
+        }
+    }, 3000);
 })();
