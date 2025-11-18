@@ -36,6 +36,11 @@
                     "domain": "live.douyin.com",
                     "windows": ["previewWeb"],
                     "enableTauriAPI": true
+                },
+                {
+                    "domain": "www.douyin.com",
+                    "windows": ["douyinLogin"],
+                    "enableTauriAPI": true
                 }
             ]
         },

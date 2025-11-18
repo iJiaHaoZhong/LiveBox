@@ -51,6 +51,13 @@
         try {
             console.log('💾 正在保存 Cookie...');
 
+            // 检查 Tauri API 是否可用
+            if (typeof window.__TAURI__ === 'undefined' || typeof window.__TAURI__.invoke === 'undefined') {
+                console.error('❌ Tauri API 不可用！请检查安全配置。');
+                showErrorMessage('Tauri API 不可用，请重启应用');
+                return;
+            }
+
             // 调用 Tauri 命令保存 Cookie
             const result = await window.__TAURI__.invoke('save_cookies', {
                 cookieString: cookieString
@@ -176,29 +183,37 @@
             </div>
         `;
 
-        // 添加动画
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideDown {
-                from {
-                    opacity: 0;
-                    transform: translateX(-50%) translateY(-20px);
-                }
-                to {
-                    opacity: 1;
-                    transform: translateX(-50%) translateY(0);
-                }
+        // 等待 DOM 加载完成后再添加元素
+        function addToDOM() {
+            // 添加动画样式
+            if (document.head) {
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes slideDown {
+                        from {
+                            opacity: 0;
+                            transform: translateX(-50%) translateY(-20px);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateX(-50%) translateY(0);
+                        }
+                    }
+                `;
+                document.head.appendChild(style);
             }
-        `;
-        document.head.appendChild(style);
 
-        // 等待 DOM 加载完成
-        if (document.body) {
-            document.body.appendChild(messageDiv);
-        } else {
-            window.addEventListener('DOMContentLoaded', () => {
+            // 添加提示消息
+            if (document.body) {
                 document.body.appendChild(messageDiv);
-            });
+            }
+        }
+
+        // 检查 DOM 是否已准备好
+        if (document.body && document.head) {
+            addToDOM();
+        } else {
+            window.addEventListener('DOMContentLoaded', addToDOM);
         }
     }
 
