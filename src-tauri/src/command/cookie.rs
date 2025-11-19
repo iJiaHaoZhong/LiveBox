@@ -170,25 +170,31 @@ pub async fn open_login_page(handle: AppHandle) -> Result<String, String> {
                             let cookie_string = decoded_cookies.to_string();
                             let store = CookieStore::from_cookie_string(&cookie_string, ".douyin.com");
 
-                            match CookieStore::get_default_path() {
+                            // 先获取路径并处理，避免跨越 await 点
+                            let save_result = match CookieStore::get_default_path() {
                                 Ok(path) => {
                                     match store.save_to_file(&path) {
                                         Ok(_) => {
                                             println!("💾 成功保存 {} 个 cookies 到 {:?}", store.cookies.len(), path);
-
-                                            // 等待 2 秒后关闭窗口（让用户看到成功提示）
-                                            sleep(Duration::from_secs(2)).await;
-                                            let _ = window_clone.close();
-                                            println!("✅ 登录窗口已关闭");
+                                            true
                                         }
                                         Err(e) => {
                                             eprintln!("❌ 保存 cookies 失败: {}", e);
+                                            false
                                         }
                                     }
                                 }
                                 Err(e) => {
                                     eprintln!("❌ 获取保存路径失败: {}", e);
+                                    false
                                 }
+                            };
+
+                            // 保存成功后等待并关闭窗口
+                            if save_result {
+                                sleep(Duration::from_secs(2)).await;
+                                let _ = window_clone.close();
+                                println!("✅ 登录窗口已关闭");
                             }
                         }
                         Err(e) => {
