@@ -51,9 +51,24 @@ pub async fn start_taobao_crawler(
     let python_cmd = detect_python_command().await?;
     println!("✅ 使用 Python: {}", python_cmd);
 
+    // 获取项目根目录（src-tauri 的父目录）
+    let current_dir = std::env::current_dir().map_err(|e| format!("无法获取当前目录: {}", e))?;
+    let project_root = current_dir.parent()
+        .ok_or("无法找到项目根目录")?;
+
+    // taobao_crawler.py 的绝对路径
+    let script_path = project_root.join("taobao_crawler.py");
+
+    if !script_path.exists() {
+        return Err(format!("未找到 taobao_crawler.py，路径: {:?}", script_path));
+    }
+
+    println!("📂 项目根目录: {:?}", project_root);
+    println!("📄 脚本路径: {:?}", script_path);
+
     // 构建命令参数
     let mut args = vec![
-        "taobao_crawler.py".to_string(),
+        script_path.to_string_lossy().to_string(),
         "--room_id".to_string(),
         room_id.clone(),
     ];
@@ -71,6 +86,7 @@ pub async fn start_taobao_crawler(
 
     let (mut rx, child) = TauriCommand::new(python_cmd)
         .args(args)
+        .current_dir(project_root)  // 设置工作目录为项目根目录
         .spawn()
         .map_err(|e| format!("启动失败: {}. 请确保已安装 Python 和相关依赖 (pip install playwright loguru aiohttp)", e))?;
 
