@@ -17,7 +17,10 @@ fn main() {
             command::cookie::save_cookies,
             command::cookie::load_cookies,
             command::cookie::clear_cookies,
-            command::cookie::open_login_page
+            command::cookie::open_login_page,
+            command::taobao::start_taobao_crawler,
+            command::taobao::stop_taobao_crawler,
+            command::taobao::check_taobao_crawler_status
         ])
         .on_window_event(|event| {
             // 当主窗口被关闭时，如果登录窗口在运行，则隐藏主窗口而不是退出

@@ -236,6 +236,13 @@ const startListen = async () => {
     clearLivex()
     // 再开始新的直播
     if (url.trim()) {
+        // 检测是否为淘宝直播间
+        if (url.includes('taobao.com') || url.includes('tbzb.taobao.com')) {
+            await startTaobaoLive(url)
+            return
+        }
+
+        // 抖音直播间处理
         // 根据直播间地址获取roomid等字段
         const roomJson: LiveInfoImp = await invoke('get_live_html', { url })
         // console.log('获取到的直播房间信息:', roomJson)
@@ -640,6 +647,52 @@ const countLive = (data) => {
     liveInfo.value = {
         ...liveInfo.value,
         customer: countMsg.onlineUserForAnchor,
+    }
+}
+
+// 启动淘宝直播间监听
+const startTaobaoLive = async (url: string) => {
+    try {
+        ElMessage.info('正在启动淘宝直播间监听...')
+
+        // 从URL中提取直播间ID
+        const roomIdMatch = url.match(/liveId=(\d+)/)
+        if (!roomIdMatch) {
+            ElMessage.error('无法从URL中提取淘宝直播间ID')
+            return
+        }
+
+        const roomId = roomIdMatch[1]
+        console.log('淘宝直播间ID:', roomId)
+
+        // 启动淘宝爬虫
+        const result = await invoke('start_taobao_crawler', {
+            roomId: roomId,
+            pushUrl: pushUrl.value
+        })
+
+        console.log('淘宝爬虫启动结果:', result)
+        ElMessage.success('淘宝直播间监听已启动！弹幕将显示在右侧')
+
+        // 设置直播间信息
+        liveInfo.value = {
+            uid: roomId,
+            status: 2,
+            title: '淘宝直播间',
+            name: '淘宝主播',
+            roomId: roomId,
+            avatar: Logo,
+            fans: 0,
+            customer: 0,
+            totalLike: 0,
+            signature: '',
+        }
+
+        ElMessage.info('淘宝直播间弹幕将通过推送URL接收')
+
+    } catch (error) {
+        console.error('启动淘宝爬虫失败:', error)
+        ElMessage.error('启动淘宝直播间失败: ' + error)
     }
 }
 

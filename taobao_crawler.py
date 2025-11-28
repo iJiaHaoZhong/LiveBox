@@ -15,20 +15,25 @@ from typing import Dict, List, Optional
 
 from playwright.async_api import async_playwright, Browser, Page
 from loguru import logger
+import aiohttp
 
 
 class TaobaoCrawler:
     """淘宝直播间弹幕抓取器"""
-    
-    def __init__(self, room_id: str, output_file: str = None):
+
+    def __init__(self, room_id: str, output_file: str = None, push_url: str = None):
         self.room_id = room_id
         self.output_file = output_file or f"taobao_{room_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         self.comments = []
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
-        
+        self.push_url = push_url
+
         # 设置日志
         logger.add(f"logs/taobao_{room_id}.log", rotation="1 day", retention="7 days")
+
+        if self.push_url:
+            logger.info(f"推送地址已配置: {self.push_url}")
         
     async def start(self):
         """启动抓取器"""
@@ -369,6 +374,10 @@ class TaobaoCrawler:
                 }
                 self.comments.append(comment)
                 logger.info(f"弹幕: {comment['user']}: {comment['content']}")
+
+                # 推送到配置的URL
+                if self.push_url:
+                    await self._push_comment(comment)
         except Exception as e:
             logger.error(f"解析弹幕失败: {e}")
 
@@ -436,6 +445,10 @@ class TaobaoCrawler:
             }
             self.comments.append(comment)
             logger.info(f"弹幕: {comment['user']}: {comment['content']}")
+
+            # 推送到配置的URL
+            if self.push_url:
+                await self._push_comment(comment)
                 
         except Exception as e:
             logger.error(f"从WebSocket提取弹幕失败: {e}")
@@ -530,19 +543,51 @@ class TaobaoCrawler:
         except json.JSONDecodeError:
             return None
     
+    async def _push_comment(self, comment: Dict):
+        """推送弹幕到配置的URL"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                payload = {
+                    "type": "chat",
+                    "platform": "taobao",
+                    "data": {
+                        "id": str(hash(f"{comment['timestamp']}{comment['user']}{comment['content']}")),
+                        "name": comment["user"],
+                        "msg": comment["content"]
+                    },
+                    "raw": comment,
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "room_id": self.room_id
+                }
+
+                async with session.post(
+                    self.push_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as response:
+                    if response.status == 200:
+                        logger.debug(f"弹幕推送成功")
+                    else:
+                        logger.warning(f"弹幕推送失败: HTTP {response.status}")
+        except asyncio.TimeoutError:
+            logger.warning("弹幕推送超时")
+        except Exception as e:
+            logger.error(f"推送弹幕失败: {e}")
+
     async def _save_comments(self):
         """保存弹幕数据"""
         try:
             # 确保输出目录存在
             output_path = Path(self.output_file)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # 保存为JSON格式
             with open(self.output_file, 'w', encoding='utf-8') as f:
                 json.dump(self.comments, f, ensure_ascii=False, indent=2)
-            
+
             logger.info(f"已保存 {len(self.comments)} 条弹幕到 {self.output_file}")
-            
+
         except Exception as e:
             logger.error(f"保存弹幕失败: {e}")
     
@@ -567,14 +612,15 @@ async def main():
     parser = argparse.ArgumentParser(description="淘宝直播间弹幕抓取工具")
     parser.add_argument("--room_id", required=True, help="直播间ID")
     parser.add_argument("--output", help="输出文件路径")
-    
+    parser.add_argument("--push_url", help="推送弹幕的URL地址")
+
     args = parser.parse_args()
-    
+
     # 创建日志目录
     Path("logs").mkdir(exist_ok=True)
-    
+
     # 创建抓取器并启动
-    crawler = TaobaoCrawler(args.room_id, args.output)
+    crawler = TaobaoCrawler(args.room_id, args.output, args.push_url)
     await crawler.start()
 
 
