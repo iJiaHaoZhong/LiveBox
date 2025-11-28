@@ -99,14 +99,24 @@ python3 example_receiver.py
 
 - **文件**: `src-tauri/src/command/taobao.rs`
 - **命令**:
-  - `start_taobao_crawler`: 启动淘宝爬虫
+  - `start_taobao_crawler`: 启动淘宝爬虫并监控输出
   - `stop_taobao_crawler`: 停止淘宝爬虫
   - `check_taobao_crawler_status`: 检查爬虫状态
+- **事件**:
+  - `taobao-log`: 实时推送爬虫日志到前端
+    - `stdout`: 标准输出
+    - `stderr`: 错误输出
+    - `error`: 错误信息
+    - `terminated`: 进程终止
 
 ### 前端集成 (Vue)
 
 - **文件**: `src/App.vue`
-- **功能**: 自动识别淘宝链接并调用相应的后端命令
+- **功能**:
+  - 自动识别淘宝链接并调用相应的后端命令
+  - 监听 `taobao-log` 事件，实时显示爬虫状态
+  - 在控制台显示详细日志
+  - 根据日志内容显示用户友好的提示消息
 
 ### Python爬虫
 
@@ -118,27 +128,61 @@ python3 example_receiver.py
   - 实时提取弹幕数据
   - 支持推送到外部URL
 
+## 实时日志监控
+
+淘宝爬虫的所有输出都会通过 Tauri 事件系统实时推送到前端：
+
+```javascript
+// 在前端监听日志
+listen('taobao-log', (event) => {
+    const { room_id, log_type, message } = event.payload
+    console.log(`[淘宝爬虫 ${room_id}] [${log_type}] ${message}`)
+})
+```
+
+日志类型：
+- `stdout`: 标准输出（包括弹幕信息）
+- `stderr`: 错误输出
+- `error`: 错误信息
+- `terminated`: 进程终止通知
+
 ## 常见问题
 
 ### 1. 启动失败提示找不到Python
 
-确保已安装Python 3.7+，并且在系统PATH中可以找到 `python3` 或 `python` 命令。
+**解决方法**：
+- 确保已安装 Python 3.7+
+- 运行 `python3 --version` 或 `python --version` 检查
+- 确保 Python 在系统 PATH 中
 
-### 2. 弹幕无法显示
+### 2. 浏览器没有弹出
 
-- 检查推送URL是否正确配置
-- 确保接收端服务正在运行
-- 查看 `logs/taobao_*.log` 日志文件
+**可能原因**：
+- Playwright 浏览器驱动未安装
+- 进程启动失败
 
-### 3. 浏览器启动失败
+**解决方法**：
+1. 查看应用控制台的日志输出
+2. 运行 `playwright install chromium` 安装浏览器
+3. 检查 Python 依赖是否完整：`pip install playwright loguru aiohttp`
 
-运行以下命令安装Playwright浏览器：
+### 3. 弹幕无法显示
 
-```bash
-playwright install chromium
-```
+**检查清单**：
+- ✅ 推送URL是否正确配置
+- ✅ 接收端服务是否正在运行（默认 http://localhost:5001/webhook）
+- ✅ 查看控制台是否有 `taobao-log` 事件
+- ✅ 查看 `logs/taobao_*.log` 日志文件
+- ✅ 检查浏览器窗口是否显示"直播已结束"
 
-### 4. 需要登录
+### 4. 进程状态未知
+
+现在通过 `taobao-log` 事件可以实时监控进程状态：
+- 启动成功会看到 "✅ 淘宝爬虫进程已启动"
+- 进程终止会收到 `terminated` 事件
+- 所有 Python 输出都会实时推送
+
+### 5. 需要登录
 
 某些直播间可能需要登录才能查看弹幕。您可以：
 

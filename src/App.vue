@@ -665,14 +665,38 @@ const startTaobaoLive = async (url: string) => {
         const roomId = roomIdMatch[1]
         console.log('淘宝直播间ID:', roomId)
 
+        // 监听淘宝爬虫日志
+        listen('taobao-log', (event: any) => {
+            const { room_id, log_type, message } = event.payload
+            console.log(`[淘宝爬虫 ${room_id}] [${log_type}] ${message}`)
+
+            // 根据日志类型显示消息
+            if (log_type === 'error') {
+                ElMessage.error(`淘宝爬虫错误: ${message}`)
+            } else if (log_type === 'terminated') {
+                ElMessage.warning(`淘宝爬虫已停止: ${message}`)
+            } else if (message.includes('✅') || message.includes('成功')) {
+                ElMessage.success(message)
+            }
+
+            // 在消息列表中显示日志（可选）
+            if (log_type === 'stdout' && message.includes('弹幕')) {
+                pushMsg({
+                    id: Date.now().toString(),
+                    name: '系统',
+                    msg: message
+                })
+            }
+        })
+
         // 启动淘宝爬虫
-        const result = await invoke('start_taobao_crawler', {
+        const result: any = await invoke('start_taobao_crawler', {
             roomId: roomId,
             pushUrl: pushUrl.value
         })
 
         console.log('淘宝爬虫启动结果:', result)
-        ElMessage.success('淘宝直播间监听已启动！弹幕将显示在右侧')
+        ElMessage.success(result.message || '淘宝直播间监听已启动！')
 
         // 设置直播间信息
         liveInfo.value = {
@@ -688,7 +712,7 @@ const startTaobaoLive = async (url: string) => {
             signature: '',
         }
 
-        ElMessage.info('淘宝直播间弹幕将通过推送URL接收')
+        ElMessage.info('浏览器窗口将在几秒内弹出，请等待...')
 
     } catch (error) {
         console.error('启动淘宝爬虫失败:', error)

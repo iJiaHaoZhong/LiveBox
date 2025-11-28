@@ -1,12 +1,18 @@
-use std::process::{Command, Stdio};
-use tauri::api::process::{Command as TauriCommand, CommandEvent};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
-use tauri::Manager;
+use tauri::{AppHandle, Manager};
+use tauri::api::process::{Command as TauriCommand, CommandEvent};
 
 // 全局保存运行中的淘宝爬虫进程
 lazy_static::lazy_static! {
-    static ref TAOBAO_PROCESSES: Arc<Mutex<HashMap<String, u32>>> = Arc::new(Mutex::new(HashMap::new()));
+    static ref TAOBAO_PROCESSES: Arc<Mutex<HashMap<String, (u32, AppHandle)>>> = Arc::new(Mutex::new(HashMap::new()));
+}
+
+#[derive(Clone, serde::Serialize)]
+struct TaobaoLogPayload {
+    room_id: String,
+    log_type: String,  // stdout, stderr, error
+    message: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -25,6 +31,7 @@ pub struct TaobaoLiveInfo {
 pub async fn start_taobao_crawler(
     room_id: String,
     push_url: Option<String>,
+    app_handle: AppHandle,
 ) -> Result<TaobaoLiveInfo, String> {
     println!("🎯 [start_taobao_crawler] 启动淘宝爬虫");
     println!("📺 直播间ID: {}", room_id);
@@ -32,17 +39,17 @@ pub async fn start_taobao_crawler(
         println!("🔗 推送地址: {}", url);
     }
 
-    // 检查Python是否可用
-    let python_check = Command::new("python3")
-        .arg("--version")
-        .output();
-
-    if python_check.is_err() {
-        println!("⚠️  python3 不可用，尝试使用 python");
+    // 检查是否已经在运行
+    {
+        let processes = TAOBAO_PROCESSES.lock().unwrap();
+        if processes.contains_key(&room_id) {
+            return Err(format!("直播间 {} 的爬虫已在运行中", room_id));
+        }
     }
 
-    // 构建Python命令
-    let python_cmd = if python_check.is_ok() { "python3" } else { "python" };
+    // 检测 Python 命令
+    let python_cmd = detect_python_command().await?;
+    println!("✅ 使用 Python: {}", python_cmd);
 
     // 构建命令参数
     let mut args = vec![
@@ -58,32 +65,74 @@ pub async fn start_taobao_crawler(
 
     println!("📝 执行命令: {} {}", python_cmd, args.join(" "));
 
-    // 启动Python进程（异步，非阻塞）
-    match Command::new(python_cmd)
-        .args(&args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+    // 使用 Tauri Command API 启动进程并监控输出
+    let room_id_clone = room_id.clone();
+    let app_handle_clone = app_handle.clone();
+
+    let (mut rx, child) = TauriCommand::new(python_cmd)
+        .args(args)
         .spawn()
+        .map_err(|e| format!("启动失败: {}. 请确保已安装 Python 和相关依赖 (pip install playwright loguru aiohttp)", e))?;
+
+    // 获取 PID
+    let pid = child.pid();
+    println!("✅ 淘宝爬虫进程已启动，PID: {}", pid);
+
+    // 保存进程信息
     {
-        Ok(child) => {
-            let pid = child.id();
-            println!("✅ 淘宝爬虫进程已启动，PID: {}", pid);
-
-            // 保存进程ID
-            let mut processes = TAOBAO_PROCESSES.lock().unwrap();
-            processes.insert(room_id.clone(), pid);
-
-            Ok(TaobaoLiveInfo {
-                room_id,
-                status: "running".to_string(),
-                message: format!("淘宝爬虫已启动，进程ID: {}", pid),
-            })
-        }
-        Err(e) => {
-            println!("❌ 启动淘宝爬虫失败: {}", e);
-            Err(format!("启动失败: {}. 请确保已安装Python和相关依赖(pip install playwright loguru)", e))
-        }
+        let mut processes = TAOBAO_PROCESSES.lock().unwrap();
+        processes.insert(room_id.clone(), (pid, app_handle.clone()));
     }
+
+    // 在后台任务中监听进程输出
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => {
+                    println!("📤 [淘宝爬虫 {}] {}", room_id_clone, line);
+                    let _ = app_handle_clone.emit_all("taobao-log", TaobaoLogPayload {
+                        room_id: room_id_clone.clone(),
+                        log_type: "stdout".to_string(),
+                        message: line,
+                    });
+                }
+                CommandEvent::Stderr(line) => {
+                    println!("⚠️  [淘宝爬虫 {}] {}", room_id_clone, line);
+                    let _ = app_handle_clone.emit_all("taobao-log", TaobaoLogPayload {
+                        room_id: room_id_clone.clone(),
+                        log_type: "stderr".to_string(),
+                        message: line,
+                    });
+                }
+                CommandEvent::Error(err) => {
+                    println!("❌ [淘宝爬虫 {}] 错误: {}", room_id_clone, err);
+                    let _ = app_handle_clone.emit_all("taobao-log", TaobaoLogPayload {
+                        room_id: room_id_clone.clone(),
+                        log_type: "error".to_string(),
+                        message: err,
+                    });
+                }
+                CommandEvent::Terminated(payload) => {
+                    println!("🛑 [淘宝爬虫 {}] 进程已终止，退出码: {:?}", room_id_clone, payload.code);
+                    let _ = app_handle_clone.emit_all("taobao-log", TaobaoLogPayload {
+                        room_id: room_id_clone.clone(),
+                        log_type: "terminated".to_string(),
+                        message: format!("进程已终止，退出码: {:?}", payload.code),
+                    });
+                    // 从进程列表中移除
+                    let mut processes = TAOBAO_PROCESSES.lock().unwrap();
+                    processes.remove(&room_id_clone);
+                }
+                _ => {}
+            }
+        }
+    });
+
+    Ok(TaobaoLiveInfo {
+        room_id,
+        status: "running".to_string(),
+        message: format!("淘宝爬虫已启动，PID: {}。浏览器窗口应该会弹出，请稍候...", pid),
+    })
 }
 
 /// 停止淘宝直播间爬虫
@@ -91,49 +140,51 @@ pub async fn start_taobao_crawler(
 pub async fn stop_taobao_crawler(room_id: String) -> Result<String, String> {
     println!("🛑 [stop_taobao_crawler] 停止淘宝爬虫: {}", room_id);
 
-    let mut processes = TAOBAO_PROCESSES.lock().unwrap();
+    let pid = {
+        let mut processes = TAOBAO_PROCESSES.lock().unwrap();
+        if let Some((pid, _)) = processes.remove(&room_id) {
+            pid
+        } else {
+            return Err(format!("未找到直播间 {} 的运行中进程", room_id));
+        }
+    };
 
-    if let Some(pid) = processes.remove(&room_id) {
-        println!("📋 找到进程 PID: {}", pid);
+    println!("📋 找到进程 PID: {}", pid);
 
-        // 尝试优雅地终止进程
-        #[cfg(unix)]
-        {
-            use nix::sys::signal::{self, Signal};
-            use nix::unistd::Pid;
+    // 尝试优雅地终止进程
+    #[cfg(unix)]
+    {
+        use nix::sys::signal::{self, Signal};
+        use nix::unistd::Pid;
 
-            match signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
-                Ok(_) => {
-                    println!("✅ 已发送终止信号到进程 {}", pid);
-                    Ok(format!("淘宝爬虫已停止 (PID: {})", pid))
-                }
-                Err(e) => {
-                    println!("⚠️  发送终止信号失败: {}", e);
-                    Err(format!("停止失败: {}", e))
-                }
+        match signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
+            Ok(_) => {
+                println!("✅ 已发送终止信号到进程 {}", pid);
+                Ok(format!("淘宝爬虫已停止 (PID: {})", pid))
+            }
+            Err(e) => {
+                println!("⚠️  发送终止信号失败: {}", e);
+                Err(format!("停止失败: {}", e))
             }
         }
+    }
 
-        #[cfg(windows)]
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        match Command::new("taskkill")
+            .args(&["/PID", &pid.to_string(), "/F"])
+            .output()
         {
-            use std::process::Command;
-            match Command::new("taskkill")
-                .args(&["/PID", &pid.to_string(), "/F"])
-                .output()
-            {
-                Ok(_) => {
-                    println!("✅ 已终止进程 {}", pid);
-                    Ok(format!("淘宝爬虫已停止 (PID: {})", pid))
-                }
-                Err(e) => {
-                    println!("⚠️  终止进程失败: {}", e);
-                    Err(format!("停止失败: {}", e))
-                }
+            Ok(_) => {
+                println!("✅ 已终止进程 {}", pid);
+                Ok(format!("淘宝爬虫已停止 (PID: {})", pid))
+            }
+            Err(e) => {
+                println!("⚠️  终止进程失败: {}", e);
+                Err(format!("停止失败: {}", e))
             }
         }
-    } else {
-        println!("⚠️  未找到运行中的爬虫进程");
-        Err(format!("未找到直播间 {} 的运行中进程", room_id))
     }
 }
 
@@ -142,4 +193,29 @@ pub async fn stop_taobao_crawler(room_id: String) -> Result<String, String> {
 pub fn check_taobao_crawler_status(room_id: String) -> bool {
     let processes = TAOBAO_PROCESSES.lock().unwrap();
     processes.contains_key(&room_id)
+}
+
+/// 检测可用的 Python 命令
+async fn detect_python_command() -> Result<String, String> {
+    // 尝试 python3
+    if let Ok(output) = std::process::Command::new("python3")
+        .arg("--version")
+        .output()
+    {
+        if output.status.success() {
+            return Ok("python3".to_string());
+        }
+    }
+
+    // 尝试 python
+    if let Ok(output) = std::process::Command::new("python")
+        .arg("--version")
+        .output()
+    {
+        if output.status.success() {
+            return Ok("python".to_string());
+        }
+    }
+
+    Err("未找到 Python。请安装 Python 3.7+ 并确保在系统 PATH 中".to_string())
 }
