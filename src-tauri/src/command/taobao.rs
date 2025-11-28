@@ -86,7 +86,7 @@ pub async fn start_taobao_crawler(
 
     let (mut rx, child) = TauriCommand::new(python_cmd)
         .args(args)
-        .current_dir(project_root)  // 设置工作目录为项目根目录
+        .current_dir(project_root.to_path_buf())  // 设置工作目录为项目根目录
         .spawn()
         .map_err(|e| format!("启动失败: {}. 请确保已安装 Python 和相关依赖 (pip install playwright loguru aiohttp)", e))?;
 
