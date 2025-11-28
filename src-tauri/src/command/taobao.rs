@@ -84,11 +84,15 @@ pub async fn start_taobao_crawler(
     let room_id_clone = room_id.clone();
     let app_handle_clone = app_handle.clone();
 
+    // 设置环境变量以解决 Windows 编码问题
+    let mut env_vars = HashMap::new();
+    env_vars.insert("PYTHONIOENCODING".to_string(), "utf-8".to_string());  // 强制 UTF-8 输出
+    env_vars.insert("PYTHONUNBUFFERED".to_string(), "1".to_string());  // 禁用输出缓冲
+
     let (mut rx, child) = TauriCommand::new(python_cmd)
         .args(args)
         .current_dir(project_root.to_path_buf())  // 设置工作目录为项目根目录
-        .env("PYTHONIOENCODING", "utf-8")  // 强制 Python 使用 UTF-8 输出
-        .env("PYTHONUNBUFFERED", "1")  // 禁用 Python 输出缓冲
+        .envs(env_vars)  // 设置环境变量
         .spawn()
         .map_err(|e| format!("启动失败: {}. 请确保已安装 Python 和相关依赖 (pip install playwright loguru aiohttp)", e))?;
 
